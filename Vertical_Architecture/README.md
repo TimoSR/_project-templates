@@ -12,6 +12,30 @@ Guardrails:
 * Decorators
   * Non destructive
 
+# Tools
+
+* namespaces
+  * used explictly, instead of indirectly
+
+* Interfaces / Traits
+  * Interface Inheritance
+* Inheritance
+* Abstract Classes
+* Generics
+
+* Partial Classes
+* Overriding
+* Operators
+
+* Records
+* Strucs
+* Tuple
+
+* Static
+* Const
+* Enum
+* Union
+
 # Motivation
 
 The architecture is highly flexible.
