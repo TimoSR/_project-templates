@@ -1,7 +1,3 @@
-# Validation Tests
-
-Looking at file imports.
-
 # Agent Driven Development
 The new era of abstract code.
 
