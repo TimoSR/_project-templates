@@ -1,4 +1,6 @@
-For bigger projects, add three things to the earlier layout: a **monorepo**, **modules inside each feature** (the same `feature → module` nesting as your backend), and an **`entities` layer** between features and `shared`. This scales to large teams and dozens of features.
+# Frontend
+
+A monorepo frontend that mirrors the backend's vertical architecture: **features split into modules** (the same `feature → module` nesting as `Backend/src/features`), an **`entities` layer** for shared business objects, and thin **apps** that only compose. It scales to large teams and dozens of features.
 
 ### Top level: monorepo (pnpm workspaces + Turborepo or Nx)
 
@@ -12,6 +14,8 @@ Frontend/
 ├── packages/                     # everything reusable, each with its own package.json
 │   ├── ui/                       # design system (tokens, primitives, patterns)
 │   ├── api-client/               # generated OpenAPI/GraphQL types + http client
+│   ├── entities/                 # shared business objects (see below)
+│   │   └── user/                 # model/, api/, ui/
 │   ├── auth/                     # session, guards, permissions
 │   ├── i18n/
 │   ├── telemetry/                # logging, analytics, error reporting
@@ -24,25 +28,31 @@ Frontend/
 │       ├── a-module/
 │       └── b-module/
 │
-├── e2e/                          # Playwright, organised by user journey
-├── tooling/                      # generators (plop/nx), scripts, codegen config
-└── configuration/
+└── tooling/
+    ├── e2e/                      # Playwright, organised by user journey
+    ├── generators/               # plop/nx generators (e.g. new module)
+    └── scripts/                  # codegen and helper scripts
 ```
 
-### One app (`apps/web/src`)
+### One app (`apps/web`, `apps/admin`)
 
 ```
-src/
-├── app/            # providers, router, layouts, error boundaries, bootstrapping
-├── pages/          # route entries: compose widgets; no logic
-├── widgets/        # large self-contained blocks (Header, DashboardPanel) built from features
-├── processes/      # (optional) flows spanning several features: onboarding, checkout wizard
-└── main.tsx
+web/
+├── public/             # static assets
+└── src/
+    ├── app/
+    │   ├── providers/          # query client, auth, i18n, theme
+    │   ├── router/
+    │   ├── layouts/
+    │   └── error-boundaries/
+    ├── pages/              # route entries: compose widgets; no logic
+    ├── widgets/            # large self-contained blocks (Header, DashboardPanel) built from features
+    └── processes/          # (optional) flows spanning several features: onboarding, checkout wizard
 ```
 
 ### A feature module (`features/a-feature/a-module`)
 
-This follows the same shape as your backend module:
+Same shape as a backend module. `b-module` is a second copy to show the nesting.
 
 ```
 a-module/
@@ -60,7 +70,7 @@ a-module/
 ├── api/                    # queries, mutations, query keys, cache invalidation
 │   ├── queries.ts
 │   ├── mutations.ts
-│   └── realtime.ts         # websockets/SSE subscriptions (your "EventHandlers")
+│   └── realtime.ts         # websockets/SSE subscriptions (backend `api/EventHandlers`)
 ├── integration/            # third-party browser SDKs (Stripe, Hubspot widget, maps)
 ├── _critical/              # constants, enums, feature flags
 ├── _dto/                   # re-exports of generated API types this module uses
@@ -84,7 +94,7 @@ apps → pages → widgets → processes → features → entities → packages 
 
 - Imports only go downward. Two modules on the same layer never import each other.
 - Code outside a module imports only its `index.ts`, never its internals.
-- Modules communicate through an **event bus** or shared entity state, not direct imports. This is the frontend version of your backend domain events.
+- Modules communicate through an **event bus** or shared entity state, not direct imports. This is the frontend version of the backend's domain events.
 - `packages/ui` has no business logic and no API calls.
 
 ### What else complex projects need
@@ -98,7 +108,6 @@ apps → pages → widgets → processes → features → entities → packages 
 | Feature flags | Checks live in each module's `_critical/flags.ts` |
 | Build speed | Turborepo/Nx caching plus the "affected" commands, so only changed packages build and test |
 | Code ownership | A `CODEOWNERS` file set per feature folder |
-| Scaffolding | A generator that creates a new module with this exact structure |
+| Scaffolding | A generator in `tooling/generators` that creates a new module with this exact structure |
 | Very large orgs | Module Federation or micro-frontends: each `features/*` becomes an independently deployed remote. Only use this when separate teams need separate deploys. |
 
-I can build this out in your `Frontend/` template: replace the copied backend files, set up pnpm + Turborepo, add the ESLint boundary rules, and add a module generator. Which framework should I use, React + Vite or Next.js?
