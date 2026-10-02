@@ -1,6 +1,6 @@
 ---
 name: high-quality-tokens
-description: Writes dense, high-signal text where every token carries information the reader or a future generation needs. Bullets and concrete, visual examples (trees, flows, tables, before/after, code) are the standard form, and preamble, repetition, filler, decoration and closing offers are cut. Use whenever writing or editing prose that people or later sessions will read - reports, docs, READMEs, CLAUDE.md, skills, memory files, design notes, plans, PR descriptions, commit messages, code comments, explanations and summaries. Also use when the user asks to shorten, condense, tighten, compress or de-noise text, or says output is too long, verbose, padded or repetitive.
+description: Writes dense, high-signal text where every token carries information the reader or a future generation needs. Bullets and concrete, visual examples (trees, flows, tables, before/after, code, Mermaid diagrams) are the standard form, and preamble, repetition, filler, decoration and closing offers are cut. Use whenever writing or editing prose that people or later sessions will read - reports, docs, READMEs, CLAUDE.md, skills, memory files, design notes, plans, PR descriptions, commit messages, code comments, explanations and summaries. Also use when the user asks to shorten, condense, tighten, compress or de-noise text, or says output is too long, verbose, padded or repetitive.
 ---
 
 # High-Quality Tokens / High-Quality Density
@@ -23,8 +23,12 @@ Dense does not mean cryptic. Finally ask: *could a reader new to the topic under
    * A name in backticks is not an example. Show it: the code, tree or flow.
 * Prefer visual examples: a tree, flow, table, before → after, input → output, or code snippet. Pick the form that matches the shape of the idea.
    * Put ✗ next to ✓. The contrast is what teaches the rule.
+* Use a Mermaid diagram for a graph ASCII can't draw cleanly: loops, branches that merge, messages between participants, states, entity relations.
+   * Only where it renders as a picture (README, docs, PR descriptions on GitHub or GitLab) or a model reads it (`CLAUDE.md`, skills, memory). A person reading a terminal, code comment or commit message sees raw source: use ASCII there.
+   * Straight lines and trees stay ASCII: `request → validation → domain` beats a rendered chain of boxes.
+   * Types, examples and syntax traps: [examples.md](examples.md#3-mermaid-diagrams).
 * Use the smallest example that shows the point. One running example reused across concepts beats a new one per concept.
-* Standard examples are in [examples.md](examples.md): a full SOLID rewrite, one instance of each visual form, and the house style for notes and rules.
+* Standard examples are in [examples.md](examples.md): a full SOLID rewrite, one instance of each visual form, Mermaid diagrams, and the house style for notes and rules.
 
 ## Cut
 

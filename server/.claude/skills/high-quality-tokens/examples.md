@@ -4,7 +4,8 @@
 
 1. Full rewrite: SOLID
 2. Visual forms
-3. House style for notes and rules
+3. Mermaid diagrams
+4. House style for notes and rules
 
 ## 1. Full rewrite: SOLID
 
@@ -105,6 +106,7 @@ Pick the form that matches the shape of the idea.
 | A rule applied, a change | Before → after (✗/✓) |
 | A transformation | Input → output |
 | Behavior in code | Smallest snippet |
+| Loops, participants, states, entity relations | Mermaid ([section 3](#3-mermaid-diagrams)) |
 
 **Tree**
 
@@ -150,7 +152,120 @@ request → DTO validation ─✗→ 400 (the domain never sees it)
 if (amount <= 0) return false; // fail early: the domain never sees an invalid amount
 ```
 
-## 3. House style for notes and rules
+## 3. Mermaid diagrams
+
+The source goes in a ` ```mermaid ` block. GitHub, GitLab, Obsidian and Notion render it as a picture, and a terminal shows the source. The examples reuse the billing feature.
+
+| Shape of the idea | Mermaid type |
+|---|---|
+| Steps with branches and loops | `flowchart` |
+| Messages between participants over time | `sequenceDiagram` |
+| States and the events that move between them | `stateDiagram-v2` |
+| Entities and their cardinality | `erDiagram` |
+
+**flowchart**: payment retry. ASCII draws the loop back to `charge` badly.
+
+```mermaid
+flowchart TD
+    charge[charge card] --> paid{paid?}
+    paid -- yes --> invoicePaid[mark invoice paid]
+    paid -- no --> retriesLeft{retries left?}
+    retriesLeft -- yes --> wait[wait 24 hours] --> charge
+    retriesLeft -- no --> pastDue[mark subscription past due]
+```
+
+**sequenceDiagram**: paying an invoice. `-)` is an async message: the provider answers later, through a webhook.
+
+```mermaid
+sequenceDiagram
+    participant api as payment api
+    participant useCase as payment use case
+    participant postgres
+    participant provider as payment provider
+    api->>useCase: PayInvoiceCommand
+    useCase->>postgres: save payment (pending)
+    useCase->>provider: create charge
+    provider-->>useCase: 202 accepted
+    provider-)api: webhook charge.succeeded
+    api->>useCase: ConfirmPaymentCommand
+    useCase->>postgres: save payment (paid)
+```
+
+**stateDiagram-v2**: subscription lifecycle. `state "past due" as pastDue` gives a label with spaces an ID.
+
+```mermaid
+stateDiagram-v2
+    state "past due" as pastDue
+    [*] --> trial
+    trial --> active: first payment
+    active --> pastDue: payment failed
+    pastDue --> active: retry succeeded
+    pastDue --> canceled: retries used up
+    active --> canceled: customer cancels
+    canceled --> [*]
+```
+
+**erDiagram**: billing data. `||--o{` reads "exactly one to zero or more".
+
+```mermaid
+erDiagram
+    SUBSCRIPTION ||--o{ INVOICE : bills
+    INVOICE ||--o{ PAYMENT : "paid by"
+    INVOICE {
+        uuid id
+        uuid subscriptionId
+        decimal amount
+        string status
+    }
+```
+
+**When ASCII wins**
+
+A straight line takes three lines of Mermaid source plus a renderer to say what ASCII says in one line.
+
+✗
+
+```mermaid
+flowchart LR
+    request --> validation --> domain
+```
+
+✓
+
+```
+request → validation → domain
+```
+
+**Writing it** (checked against Mermaid 11)
+
+* IDs are full camelCase names, so the raw source reads as clearly as the picture.
+
+```
+✗ C -- no --> D{E?}
+✓ paid -- no --> retriesLeft{retries left?}
+```
+
+* Quote a label that contains parentheses.
+
+```
+✗ dto[DTO (request / command)] --> domain      Parse error: ... got 'PS'
+✓ dto["DTO (request / command)"] --> domain
+```
+
+* A lowercase `end` node breaks a flowchart, because `end` is a keyword.
+
+```
+✗ start --> end
+✓ start --> done
+```
+
+* Render the diagram before committing it. GitHub shows a syntax error in place of the diagram. Either paste it into https://mermaid.live or run:
+
+```bash
+npx -p @mermaid-js/mermaid-cli mmdc -i diagram.mmd -o diagram.svg   # fails on a syntax error
+```
+
+## 4. House style for notes and rules
 
 Nested bullets, one idea per line, fragments, no prose intros. Each parent is an idea and its children refine it.
 

@@ -114,6 +114,18 @@ Accounting (consumer, restaurant, courier) → Accounting Service   similar enou
 }
 ```
 
+```mermaid
+stateDiagram-v2
+    closed: closed (calls go through)
+    open: open (calls fail immediately)
+    halfOpen: half-open (one probe call goes through)
+    [*] --> closed
+    closed --> open: failureRatio reached
+    open --> halfOpen: breakDurationSeconds elapsed
+    halfOpen --> closed: probe succeeds
+    halfOpen --> open: probe fails
+```
+
 * Then decide recovery per call, based on how much the caller needs the data:
 
 ```
@@ -184,10 +196,18 @@ COMMIT;
       * This doesn't work for huge data sets (every consumer), and it doesn't help when you must update another service's data.
    3. **Validate locally, save with an outbox row, reply, finish asynchronously:**
 
-```
-POST /orders → Order(APPROVAL_PENDING) + outbox row → 201 { orderId }
-          async: ValidateConsumerInfo, ValidateOrderDetails ... → Order APPROVED or REJECTED
-client: polls GET /orders/{id}, or receives a notification
+```mermaid
+sequenceDiagram
+    participant client
+    participant orderService as Order Service
+    participant otherServices as Consumer, Kitchen, Accounting
+    client->>orderService: POST /orders
+    orderService->>orderService: save Order(APPROVAL_PENDING) + outbox row
+    orderService-->>client: 201 { orderId }
+    orderService-)otherServices: ValidateConsumerInfo, ValidateOrderDetails ...
+    otherServices-)orderService: replies
+    orderService->>orderService: Order APPROVED or REJECTED
+    client->>orderService: poll GET /orders/{id}, or receive a notification
 ```
 
 * The price of option 3: the client must handle an order that isn't decided yet. It usually pays off, because the saga is needed for consistency anyway.

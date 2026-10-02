@@ -1,5 +1,5 @@
 ---
-name: best-practices
+name: claude-best-practices
 description: Claude Code working practices - verification, planning, context management, review, and configuring CLAUDE.md and .claude/. Use when starting a multi-file or non-trivial change, when setting up or auditing CLAUDE.md or .claude/ (skills, agents, hooks, settings), when planning headless, parallel or unattended Claude Code runs, or when the user asks how to use Claude Code effectively.
 ---
 

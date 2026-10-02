@@ -123,10 +123,21 @@ return AcceptTicketOutcome.Accepted;
    * A correlation id (`orderId`) in every event, so participants can find their own data.
 * **Orchestrator = state machine.** It covers every scenario, not just the happy path, and it's easy to test:
 
-```
-VerifyingConsumer ─ConsumerVerified→ CreatingTicket ─TicketCreated→ AuthorizingCard ─CardAuthorized→ ApprovingTicket → ApprovingOrder → OrderApproved
-   │ failed                             │ failed                       │ failed
-   └──────────→ RejectingOrder ←────────┘                              └→ RejectingTicket → RejectingOrder → OrderRejected
+```mermaid
+stateDiagram-v2
+    [*] --> VerifyingConsumer
+    VerifyingConsumer --> CreatingTicket: ConsumerVerified
+    CreatingTicket --> AuthorizingCard: TicketCreated
+    AuthorizingCard --> ApprovingTicket: CardAuthorized
+    ApprovingTicket --> ApprovingOrder: TicketApproved
+    ApprovingOrder --> OrderApproved: OrderApproved
+    VerifyingConsumer --> RejectingOrder: ConsumerVerificationFailed
+    CreatingTicket --> RejectingOrder: TicketCreationFailed
+    AuthorizingCard --> RejectingTicket: CardAuthorizationFailed
+    RejectingTicket --> RejectingOrder: TicketRejected
+    RejectingOrder --> OrderRejected: OrderRejected
+    OrderApproved --> [*]
+    OrderRejected --> [*]
 ```
 
 ```csharp

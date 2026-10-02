@@ -7,7 +7,7 @@ A C# server architecture template. It is **opt-out**: new projects copy it and d
 Write only tokens that carry value for the reader or for future generations. A dense 5-page report beats the same content spread over 30 pages.
 
 * Bullets are the default form.
-* Every concept gets a concrete, visual example: a tree, flow, table, before → after, or code. The standard forms are in `.claude/skills/high-quality-tokens/examples.md`.
+* Every concept gets a concrete, visual example: a tree, flow, table, before → after, code, or a Mermaid diagram (for loops, sequences and states, where it renders). The standard forms are in `.claude/skills/high-quality-tokens/examples.md`.
 * Cut preamble, repetition, filler, decoration and closing offers.
 * Keep decisions with their reasons, and concrete facts.
 * Match the depth to what was asked.
