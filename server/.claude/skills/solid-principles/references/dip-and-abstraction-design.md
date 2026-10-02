@@ -1,95 +1,140 @@
-# Dependency Inversion Principle and abstraction design
+# Dependency Inversion and abstraction design
+
+## Contents
+- Definition
+- Why `new` is a code smell
+- Package structure: Entourage vs Stairway
+- Designing good abstractions
+- Checklist
 
 ## Definition
 
 > High-level modules should not depend on low-level modules. Both should depend on abstractions.
 > Abstractions should not depend on details. Details should depend on abstractions.
 
-In practice, an interface sits between client and implementation, and **both** depend on it. The principle has to hold at the class level *and* at the package (assembly/project/module) level. Most violations happen at the package level.
+* An interface sits between client and implementation, and **both** depend on it.
+* It must hold at class level *and* at package level (assembly, project, module). Most violations are at package level.
 
 ## Why `new` is a code smell
 
-Interfaces describe *what*, classes describe *how*, and constructors belong to the *how*. So apart from a few exceptions (value types, DTOs, framework primitives, and the composition root), `new SomeService()` inside a client is inappropriate intimacy. It causes four problems:
-
-1. **The dependency is permanent.** Swapping the implementation means editing the client or growing the existing service.
-2. **Hidden transitive dependencies.** A parameterless `SecurityService()` may quietly open an ORM session, so `AccountController` now depends on the ORM too. If that constructor's signature changes (it starts needing a connection string), every client breaks.
-3. **Untestable.** The real dependency can't be replaced with a fake without heavy tools that intercept constructors.
-4. **Leaky method design.** Clients end up building things (`new UserRepository().GetByID(id)`) only to satisfy a badly shaped API. Move that work behind the service: `ChangeUsersPassword(Guid userId, string newPassword)`.
-
-The fix: extract the interface, depend on it, inject it through the constructor, and guard against null.
+Interfaces describe *what*, classes describe *how*, and constructors belong to the *how*. Outside value types, DTOs, framework primitives and the composition root, `new SomeService()` in a client is inappropriate intimacy:
 
 ```csharp
-public AccountController(ISecurityService securityService)
+// ✗ the controller builds its own service
+public class AccountController
 {
-    this.securityService = securityService ?? throw new ArgumentNullException(nameof(securityService));
+    private readonly SecurityService securityService = new SecurityService();   // quietly opens an ORM session
+}
+
+// ✓ depend on the interface, inject it, guard it
+public class AccountController
+{
+    private readonly ISecurityService securityService;
+    public AccountController(ISecurityService securityService)
+    {
+        this.securityService = securityService ?? throw new System.ArgumentNullException(nameof(securityService));
+    }
 }
 ```
 
-Statics such as `ConfigurationManager`, `DateTime.Now`, and global singletons are "skyhooks", the same smell in a different form. Put them behind an adapter interface (`ISettings`, `IClock`).
+What the ✗ version costs:
 
-## Package structure: Entourage vs. Stairway
+1. **Permanent dependency.** Swapping the implementation means editing the client or growing the service.
+2. **Hidden transitive dependencies.** The controller now depends on the ORM too. If `SecurityService`'s constructor starts needing a connection string, every client breaks.
+3. **Untestable.** No fake without tools that intercept constructors.
+4. **Leaky method design.** Clients build things only to satisfy a badly shaped API (`new UserRepository().GetByID(id)`). Move that work behind the service: `ChangeUsersPassword(Guid userId, string newPassword)`.
 
-### The Entourage anti-pattern
+Statics are the same smell in another form ("skyhooks"): `ConfigurationManager`, `DateTime.Now`, global singletons. Put them behind an adapter interface:
 
-The interface and its implementation share a package. `Controllers → Services` (which holds `ISecurityService` *and* `SecurityService`) → `Domain` → NHibernate. You ask for one interface and its whole entourage follows: build `Controllers` alone and NHibernate still shows up in `bin/`. This causes two problems:
+```csharp
+// ✗ untestable: the test can't control the time
+if (System.DateTime.Now.Hour >= 17) CloseTrading();
 
-- **Discipline.** The implementations must be public so they can be constructed somewhere, so nothing stops a developer from `new`ing one directly.
-- **Bloat.** Adding an alternative implementation (say, one using a message bus) adds *its* dependencies to the shared package, and every client picks them up.
+// ✓ IClock is injected; a test passes a fixed clock
+if (clock.Now.Hour >= 17) CloseTrading();
+```
 
-### The Stairway pattern
-
-Put interfaces and implementations in **separate packages**:
+## Package structure: Entourage vs Stairway
 
 ```
+✗ Entourage: the interface ships with its implementation
+Controllers ──► Services { ISecurityService, SecurityService } ──► Domain ──► NHibernate
+                (build Controllers alone and NHibernate still lands in bin/)
+
+✓ Stairway: interfaces and implementations in separate packages
 Controllers ──► Services.Interfaces ◄── Services.Impl ──► Domain.Interfaces ◄── Domain.Impl ──► Data.Interfaces ◄── Data.NHibernate
 ```
 
-- Clients reference only interface packages.
-- Implementations reference their own interface package plus the *interface* packages of whatever they depend on, never another implementation package.
-- **Interface packages have no external dependencies.** Their signatures expose only your own types, other interface packages' types, and core framework types. They never expose third-party types (ORM sessions, driver/document types, logger types). Third-party libraries usually ship in Entourage form (interface and implementation in one package), so depending on their interfaces still ties you to their implementation. Wrap them behind your own interface with an adapter.
-- This adds only a few projects, and it often *reduces* the count in a badly arranged solution.
-- **Pragmatic limit:** when wrapping a large framework would cost too much, accept that it becomes omnipresent, and acknowledge that replacing it later will be expensive.
+What Entourage costs:
 
-In layered architectures, each layer is an interface package plus an implementation package. A higher layer that references a lower layer's *implementation* is a **leaky abstraction**: the lower layer's dependencies seep upward. A domain model should not reference the ORM. Put ORM mapping in a separate, implementation-specific package.
+* **Discipline:** implementations must be public to be constructed anywhere, so nothing stops a developer `new`ing one.
+* **Bloat:** an alternative implementation (say, over a message bus) adds *its* dependencies to the shared package, and every client picks them up.
+
+Stairway rules:
+
+* Clients reference only interface packages.
+* An implementation references its own interface package plus the *interface* packages of its dependencies, never another implementation package.
+* **Interface packages have no external dependencies.** Signatures expose only your own types, other interface packages' types and core framework types.
+   * Never third-party types (ORM sessions, driver or document types, logger types).
+   * Third-party libraries usually ship as an Entourage, so depending on their interfaces still ties you to their implementation. Wrap them behind your own interface with an adapter.
+* It adds a few projects, and often *reduces* the count in a badly arranged solution.
+* **Pragmatic limit:** when wrapping a large framework costs too much, accept that it's omnipresent and that replacing it later will be expensive.
+* **Layers:** each layer is an interface package plus an implementation package.
+   * A higher layer referencing a lower layer's *implementation* is a leaky abstraction: the lower layer's dependencies seep upward.
+   * A domain model must not reference the ORM. Put ORM mapping in a separate, implementation-specific package.
 
 ## Designing good abstractions
 
-Interfaces are not automatically abstractions. The book's example is a measurement app with `Camera`, `Laser`, and `TouchProbe` sensors under an abstract `Sensor` base that has a virtual `Move`, plus a command switchboard that type-sniffs (`CurrentSensor as Camera`) for every command. It has three problems:
+Interfaces are not automatically abstractions. The book's example is a measurement app:
 
-- **Premature abstraction.** `Sensor` assumes every sensor moves. A static `HeatDetector` would have to throw from `Move()`, which is an LSP violation.
-- **Concretion coupling.** The switchboard knows every concrete sensor class.
-- **Type-sniffing everywhere.**
+* Sensors `Camera`, `Laser` and `TouchProbe` share an abstract `Sensor` base with a virtual `Move`.
+* A command switchboard type-sniffs (`CurrentSensor as Camera`) for every command.
 
-### The trouble with "extract interface"
+Three problems:
 
-Running a refactoring tool's "extract interface" on each class gives `ICamera`, `ILaser`, `ITouchProbe`, each 1:1 with its class. That adds indirection, costs comprehensibility, and buys nothing.
+* **Premature abstraction:** `Sensor` assumes every sensor moves, so a static `HeatDetector` would throw from `Move()`, which violates LSP.
+* **Concretion coupling:** the switchboard knows every concrete sensor.
+* **Type-sniffing everywhere.**
+
+Running "extract interface" on each class gives `ICamera`, `ILaser`, `ITouchProbe`, each 1:1 with its class: indirection for nothing.
 
 ### Abstract capabilities instead
 
-Look for shared *behavior* hiding behind different names. Camera `Zoom` and probe `Raise`/`Lower` are both z-axis adjustment, and every sensor moves in x/y. Name the capabilities as **-able adjectives**, which come from verbs:
+Look for shared *behavior* behind different names. Camera `Zoom` and probe `Raise`/`Lower` are both z-axis adjustment, and every sensor moves in x/y. Name capabilities as **-able adjectives**:
 
 ```csharp
-public interface ISensor            { string GetName(); }                     // the only universal trait
+public interface ISensor            { string GetName(); }                       // the only universal trait
 public interface IMovable           { void Move(float x, float y); }
-public interface IHeightAdjustable  { void Raise(float h); void Lower(float h); }
-public interface IRotatable         { void Pitch(float p); void Roll(float r); }
+public interface IHeightAdjustable  { void Raise(float height); void Lower(float height); }
+public interface IRotatable         { void Pitch(float pitch); void Roll(float roll); }
 public interface IMeasurable        { void WriteMeasurement(TextWriter writer); }
 
-public class Camera     : ISensor, IMovable, IHeightAdjustable { ... }   // Raise/Lower drive the zoom level
+public class Camera     : ISensor, IMovable, IHeightAdjustable { ... }      // Raise/Lower drive the zoom
 public class Laser      : ISensor, IMovable { ... }
 public class TouchProbe : ISensor, IMovable, IRotatable, IHeightAdjustable { ... }
 ```
 
-- Each class **opts in** to the capabilities it has. That is an intersection of capabilities, not a union of every method on one fat `ISensor`.
-- The client sniffs for **capabilities**, not concretions (`CurrentSensor as IHeightAdjustable`). One command per capability means the switchboard shrinks and becomes self-documenting. A new sensor that implements the right interfaces works with **no client change**. A natural next step is to make each command an `ICommand` so the switchboard itself is closed for modification.
-- **Reuse is the test of an abstraction.** `IMovable` and `IHeightAdjustable` are reused. `IRotatable` is used once, which is a warning sign (and it is missing yaw, which nobody needs, so don't add it).
-- **Unify disparate queries by turning them into a command.** `Capture()` returns `Image`, `Measure()` returns `float`, and `GetPressure()` returns `PoundsPerSquareInch`, so there is no common return type. Look at what the client actually *wants*, which is to output the measurement, and invert it: `IMeasurable.WriteMeasurement(TextWriter)`. Choose the most reusable sink: `TextWriter` (console, file, HTTP response) rather than `Console`.
-- **Sealed or third-party classes** can still join the abstraction through **adapters** that implement your capability interfaces.
+* Each class **opts in** to its capabilities: an intersection, not a union of every method on one fat `ISensor`.
+* The client sniffs **capabilities**, not concretions:
 
-## Summary checklist
+```csharp
+// ✗ every new sensor edits the switchboard
+if (CurrentSensor is Camera camera) camera.Zoom(level);
 
-- Does any business class `new` a service or call infrastructure statics? Then inject an interface.
-- Does any interface package reference an implementation package or a third-party library? Then restructure into a Stairway and add an adapter.
-- Does any interface have exactly one non-test implementation and mirror its class 1:1? Then reconsider: model capabilities, or drop the interface.
-- Are clients casting to concrete types? Then introduce capability interfaces.
-- Does an abstraction force some implementers to throw? Then the abstraction is premature; split it.
+// ✓ a new sensor that implements IHeightAdjustable works with no client change
+if (CurrentSensor is IHeightAdjustable adjustable) adjustable.Raise(height);
+```
+
+   * One command per capability shrinks the switchboard and documents it. Next step: make each command an `ICommand`, so the switchboard is closed for modification.
+* **Reuse is the test of an abstraction.** `IMovable` and `IHeightAdjustable` are reused. `IRotatable` is used once, which is a warning sign. It also lacks yaw, which nobody needs, so don't add it.
+* **Turn disparate queries into one command.** `Capture()` returns `Image`, `Measure()` returns `float`, `GetPressure()` returns `PoundsPerSquareInch`: no common return type. The client actually wants to *output* the measurement, so invert it into `IMeasurable.WriteMeasurement(TextWriter)`.
+   * Pick the most reusable sink: `TextWriter` (console, file, HTTP response), not `Console`.
+* **Sealed or third-party classes** join the abstraction through adapters that implement your capability interfaces.
+
+## Checklist
+
+* A business class `new`s a service or calls infrastructure statics → inject an interface.
+* An interface package references an implementation package or a third-party library → restructure into a Stairway; add an adapter.
+* An interface has exactly one non-test implementation and mirrors its class → model capabilities, or drop the interface.
+* Clients cast to concrete types → introduce capability interfaces.
+* An abstraction forces some implementers to throw → it's premature; split it.

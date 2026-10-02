@@ -1,34 +1,52 @@
 ---
 name: best-practices
-description: Use when starting a multi-file or non-trivial change, when setting up or auditing CLAUDE.md or .claude/ (skills, agents, hooks, settings), when planning headless, parallel or unattended Claude Code runs, or when the user asks how to use Claude Code effectively.
+description: Claude Code working practices - verification, planning, context management, review, and configuring CLAUDE.md and .claude/. Use when starting a multi-file or non-trivial change, when setting up or auditing CLAUDE.md or .claude/ (skills, agents, hooks, settings), when planning headless, parallel or unattended Claude Code runs, or when the user asks how to use Claude Code effectively.
 ---
 
 # Claude Code Best Practices
 
-Context is the scarcest resource; performance degrades as it fills. For commands, shortcuts, example prompts and config recipes, read [reference.md](reference.md).
+Context is the scarcest resource: the window holds every message, file read and command output, and performance degrades as it fills. Most rules below follow from that. Commands, prompts and config recipes are in [reference.md](reference.md).
 
 ## Verify
-- Before finishing, run a check that returns pass/fail: tests, build, linter, a fixture diff, or a screenshot compared against a design.
-- For UI changes, screenshot the result, compare it to the target, list the differences and fix them.
-- Address the root cause. Don't suppress the error.
-- Show evidence: the command you ran and its output, or the screenshot. Don't just assert success.
-- For unattended work, suggest a stronger gate: a `/goal` condition, a Stop hook, or a verification subagent.
+
+* Before finishing, run a check that returns pass/fail: tests, build, linter, a fixture diff, or a screenshot compared against a design.
+
+```
+✗ "implement a function that validates email addresses"
+✓ "write validateEmail. test cases: user@example.com → true, invalid → false, user@.com → false.
+   run the tests after implementing"
+```
+
+* UI changes: screenshot the result, compare it to the target, list the differences, fix them.
+* Fix the root cause; don't suppress the error.
+* Show evidence (the command and its output, or the screenshot), never just an assertion.
+* Unattended work needs a stronger gate: a `/goal` condition, a Stop hook or a verification subagent ([reference §1](reference.md#1-verification)).
 
 ## Plan
-- Uncertain approach, multi-file change, or unfamiliar code: explore (read only), then plan, then implement against the plan, then commit.
-- If the diff fits in one sentence, skip the plan and do it.
-- For large features, interview the user with `AskUserQuestion` about the hard parts, edge cases and tradeoffs. Then write a self-contained `SPEC.md` that names files and interfaces, states what is out of scope, and ends with an end-to-end verification step.
+
+```
+uncertain approach, multi-file change, or unfamiliar code?
+  yes → explore (read only) → plan → implement against the plan → commit
+  no  → the diff fits in one sentence: do it
+```
+
+* Large features: interview the user with `AskUserQuestion` about the hard parts, edge cases and trade-offs. Then write a self-contained `SPEC.md` that names files and interfaces, states what's out of scope, and ends with an end-to-end verification step.
 
 ## Context
-- Scope investigations narrowly. Send broad research to a subagent and keep only its summary.
-- Prefer CLI tools (`gh`, `aws`, `gcloud`) for external services. Learn unknown ones with `--help`.
-- For bugs, reproduce the symptom with a failing test, then fix it.
-- After two failed corrections on the same issue, suggest `/clear` and a sharper prompt that includes what was learned.
-- Checkpoints track only Claude's file-tool edits, not Bash or external changes. Git is the safety net.
+
+* Scope investigations narrowly. Send broad research to a subagent and keep only its summary.
+* Reach external services through CLI tools (`gh`, `aws`, `gcloud`). Learn unknown ones with `--help`.
+* Bugs: reproduce the symptom with a failing test, then fix it.
+* After two failed corrections on the same issue, suggest `/clear` and a sharper prompt that includes what was learned.
+* Checkpoints track only Claude's file-tool edits, not Bash or external changes. Git is the safety net.
 
 ## Review
-- For non-trivial or unattended work, review the diff in a fresh subagent (or `/code-review`) against the plan: every requirement implemented, edge cases tested, nothing out of scope changed.
-- Reviewers usually report gaps even when the work is sound. Act only on findings that affect correctness or the stated requirements.
+
+* Non-trivial or unattended work: review the diff in a fresh subagent (or `/code-review`) against the plan. Every requirement implemented, edge cases tested, nothing out of scope changed.
+* Reviewers usually report gaps even when the work is sound. Act only on findings that affect correctness or the stated requirements.
 
 ## Configuring `.claude/`
-Read the "Choosing a mechanism" and "CLAUDE.md" sections of [reference.md](reference.md) first. The core test for every `CLAUDE.md` line: *"Would removing this cause Claude to make mistakes?"* If not, cut it.
+
+* Choose the mechanism first ([reference §4](reference.md#4-configuring-the-environment)): `CLAUDE.md` for every-session rules, skills for on-demand knowledge, hooks for must-happen actions, subagents for isolated tasks.
+* For every `CLAUDE.md` line: *would removing this cause Claude to make mistakes?* If not, cut it.
+* Write all of it per the `high-quality-tokens` skill. Every line is reloaded in every session.

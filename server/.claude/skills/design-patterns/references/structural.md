@@ -1,6 +1,6 @@
 # Structural patterns
 
-Structural patterns assemble objects and classes into larger structures while keeping those structures flexible and efficient.
+Assemble objects and classes into larger structures that stay flexible. Look-alikes are compared in [SKILL.md](../SKILL.md#look-alikes-tell-them-apart-by-intent), not repeated here.
 
 ## Contents
 - Adapter
@@ -14,190 +14,213 @@ Structural patterns assemble objects and classes into larger structures while ke
 ---
 
 ## Adapter
-*Also: Wrapper.*
 
-**Intent.** Let objects with incompatible interfaces collaborate.
+*Also: Wrapper.* Let objects with incompatible interfaces collaborate.
 
-**Use when**
-- You want to use an existing class (legacy, third-party, or heavily depended-on) whose interface doesn't match the rest of your code — e.g. an analytics library that takes JSON while your app produces XML.
-- Several existing subclasses lack a common feature that can't be added to their superclass. Instead of duplicating it in new subclasses, wrap them in an adapter that adds it (this approaches Decorator).
+* Use when
+   * an existing class (legacy, third-party, heavily depended-on) has the wrong interface: the analytics library takes JSON, your app produces XML
+   * several subclasses lack a feature that can't go in their superclass: wrap them instead of duplicating it (this approaches Decorator)
 
-**How to implement**
-1. Identify the service class you can't (or shouldn't) change and the client(s) that need it.
-2. Declare the client interface: how clients want to talk to the service.
-3. Create the adapter implementing the client interface, methods empty for now.
-4. Give the adapter a reference to the service (usually via constructor; sometimes passed per call).
-5. Implement each client-interface method by delegating to the service. The adapter only converts interfaces and data formats — no business logic.
-6. Clients use the adapter only through the client interface, so adapters can change or multiply without touching clients.
+```csharp
+// ✗ every call site converts by hand
+analytics.Track(ConvertXmlToJson(stockData));
 
-**Variants.** *Object adapter* (composition — works everywhere) vs *class adapter* (inherits from both interfaces — needs multiple inheritance).
+// ✓ one adapter speaks the interface the app wants; it converts and nothing more
+interface IStockAnalytics { void Track(System.Xml.XmlDocument stockData); }
+class JsonAnalyticsAdapter(AnalyticsLibrary library) : IStockAnalytics
+{
+    public void Track(System.Xml.XmlDocument stockData) => library.Track(ConvertXmlToJson(stockData));
+}
+```
 
-**Pros.** SRP: conversion code separated from business logic. OCP: new adapters without breaking clients.
-**Cons.** More interfaces and classes. If you own the service, simply changing it to fit may be simpler.
-
-**Relations**
-- vs Bridge: Adapter is retrofitted onto an existing app; Bridge is designed up front.
-- vs Decorator: Adapter changes the interface; Decorator keeps and enhances it and supports recursive stacking.
-- vs Proxy: different interface vs same interface.
-- vs Facade: Adapter makes one existing interface usable; Facade defines a new interface over a subsystem.
-- Shares composition-based structure with Bridge, State, and Strategy; the intent differs.
+* No business logic in the adapter: it converts interfaces and data formats only.
+* Variants: *object adapter* (composition, works everywhere) vs *class adapter* (inherits both sides, needs multiple inheritance).
+* Cost: more interfaces and classes. If you own the service, changing it to fit is often simpler.
 
 ---
 
 ## Bridge
 
-**Intent.** Split a large class, or a set of closely related classes, into two hierarchies — abstraction and implementation — that can evolve independently.
+Split a large class, or a set of related classes, into two hierarchies (abstraction and implementation) that evolve independently.
 
-**Use when**
-- A monolithic class has several variants of some functionality (e.g. works with several database servers), and every change ripples across the whole class.
-- A class must be extended along two or more orthogonal dimensions (Shape × Color, Remote × Device). Inheritance would need one subclass per combination.
-- You need to swap implementations at runtime (optional; this is why Bridge gets confused with Strategy).
+* Use when
+   * a monolithic class has several variants of one functionality (it works with several database servers), and every change ripples through it
+   * a class must extend along two or more orthogonal dimensions
+   * implementations must be swappable at run time (optional; this is why Bridge gets confused with Strategy)
 
-**How to implement**
-1. Identify the orthogonal dimensions: abstraction/platform, domain/infrastructure, front-end/back-end, interface/implementation.
-2. Put the operations clients need into the base abstraction class.
-3. Determine the operations available on every platform; declare the ones the abstraction needs in a general implementation interface.
-4. Create a concrete implementation per platform, all following that interface.
-5. Give the abstraction a reference field of the implementation type and delegate most work to it.
-6. For variants of high-level logic, create refined abstractions by extending the base abstraction.
-7. Clients pass an implementation into the abstraction's constructor and then use only the abstraction.
+```
+✗ one subclass per combination: Remote × Device
+Remote
+├─ BasicTvRemote      ├─ BasicRadioRemote
+└─ AdvancedTvRemote   └─ AdvancedRadioRemote
 
-**Pros.** Platform-independent classes and apps. Clients see only high-level abstractions. OCP: new abstractions and implementations independently. SRP: high-level logic vs platform details.
-**Cons.** Over-complicates a class that is already highly cohesive.
+✓ two hierarchies joined by one reference
+Remote ──device──► IDevice
+├─ BasicRemote        ├─ Tv
+└─ AdvancedRemote     └─ Radio
+```
 
-**Relations**
-- vs Adapter (see above). Same structure as State/Strategy; different intent.
-- With Abstract Factory: encapsulate which abstractions pair with which implementations.
-- With Builder: the director is the abstraction, builders are implementations.
+```csharp
+class Remote(IDevice device)
+{
+    public void TogglePower() { if (device.IsEnabled) device.Disable(); else device.Enable(); }
+}
+class AdvancedRemote(IDevice device) : Remote(device)
+{
+    public void Mute() => device.SetVolume(0);
+}
+var remote = new AdvancedRemote(new Radio());
+```
+
+* Steps that matter
+   1. Name the dimensions: abstraction/platform, domain/infrastructure, front end/back end.
+   2. The abstraction holds the operations clients need. The implementation interface declares only the platform operations the abstraction uses.
+   3. Variants of high-level logic become refined abstractions; platforms become implementations.
+   4. Clients pass an implementation into the abstraction's constructor, then use only the abstraction.
+* Cost: over-complicates a class that is already highly cohesive.
+* Relations: Abstract Factory encapsulates which abstractions pair with which implementations. With Builder, the director is the abstraction.
 
 ---
 
 ## Composite
-*Also: Object Tree.*
 
-**Intent.** Compose objects into trees and work with the tree as if it were a single object.
+*Also: Object Tree.* Compose objects into trees and treat the tree like a single object.
 
-**Use when**
-- The core model is a tree: simple leaves plus containers that hold leaves and other containers (boxes containing products and boxes; UI containers; file systems).
-- Clients should treat simple and complex elements uniformly through one interface (e.g. "get price" recurses through the whole order).
+* Use when
+   * the core model is a tree: leaves plus containers holding leaves and other containers (boxes of products and boxes; UI containers; file systems)
+   * clients should treat simple and complex elements alike ("get price" recurses through the whole order)
 
-**How to implement**
-1. Confirm the model is a tree; break it into simple elements and containers (containers hold both kinds).
-2. Declare the component interface with methods meaningful for both leaves and containers.
-3. Create leaf classes for simple elements (there may be several).
-4. Create a container class with a child collection typed as the component interface. Its methods delegate to children and combine results.
-5. Add child add/remove methods to the container. Declaring them on the component interface lets clients treat everything uniformly while building the tree, but breaks ISP (leaves get empty methods) — pick deliberately.
+```csharp
+// ✗ the client walks the tree and type-checks every node
+decimal total = 0;
+foreach (var item in box.Items) total += item is Box inner ? SumBox(inner) : ((Product)item).Price;
 
-**Pros.** Polymorphism and recursion make complex trees convenient. OCP: new element types without breaking tree-handling code.
-**Cons.** If element types differ too much, the common interface becomes overgeneralized and hard to understand.
+// ✓ one interface; containers recurse
+interface IOrderItem { decimal Price(); }
+class Product(decimal price) : IOrderItem { public decimal Price() => price; }
+class Box(List<IOrderItem> children) : IOrderItem
+{
+    public decimal Price() => children.Sum(child => child.Price());
+}
+```
 
-**Relations**
-- Build trees with Builder; traverse with Iterator; run operations with Visitor; share leaves with Flyweight.
-- Chain of Responsibility: a request can bubble from a leaf up through its parents to the root.
-- vs Decorator: Decorator has one child and adds responsibilities; Composite sums up its children. Decorators can extend specific nodes of a Composite.
-- Prototype lets you clone a whole tree instead of rebuilding it.
+* Decide deliberately: `Add`/`Remove` on the component interface lets clients build trees uniformly but breaks ISP, because leaves get empty methods.
+* Cost: if element types differ too much, the shared interface becomes overgeneralized.
+* Relations: Builder builds trees, Iterator traverses them, Visitor runs operations over them, Flyweight shares leaves, Chain of Responsibility bubbles requests from a leaf to the root, Prototype clones a whole tree.
 
 ---
 
 ## Decorator
-*Also: Wrapper.*
 
-**Intent.** Attach new behaviors to an object by placing it inside wrapper objects that contain those behaviors.
+*Also: Wrapper.* Attach behaviors by wrapping an object in objects that contain them.
 
-**Use when**
-- Extra behaviors must be added to objects at runtime in arbitrary combinations without breaking the code that uses them (e.g. a notifier that sends via email + SMS + Slack; a data source that compresses + encrypts). Subclassing would need one class per combination.
-- Inheritance is awkward or impossible (e.g. the class is `final`/`sealed`).
+* Use when
+   * behaviors are combined at run time in any mix (a notifier sending email + SMS + Slack; a data source that compresses + encrypts), and subclassing would need one class per combination
+   * inheritance is awkward or impossible (`sealed`)
 
-**How to implement**
-1. Confirm the domain is a primary component with optional layers over it.
-2. Put the methods common to the component and the layers in a component interface.
-3. Write the concrete component with the base behavior.
-4. Write a base decorator holding a reference typed as the component interface (so it can wrap components *or* decorators) and delegating everything to it.
-5. Make sure every class implements the component interface.
-6. Write concrete decorators extending the base decorator; each runs its behavior before or after delegating.
-7. The client builds and composes the stack of decorators.
+```csharp
+// ✗ a subclass per combination
+class EncryptedCompressedFileDataSource : FileDataSource { ... }
 
-**Pros.** Extend behavior without subclassing. Add or remove responsibilities at runtime. Combine behaviors by stacking. SRP: split a class that implements many behavior variants into small classes.
-**Cons.** Hard to remove one specific wrapper from the middle of a stack. Hard to make a decorator's behavior independent of its position in the stack. The setup code that assembles layers can look ugly (DI-container decoration helps).
+// ✓ wrappers stack in any order, chosen at run time
+class Compression(IDataSource inner) : IDataSource
+{
+    public void Write(byte[] data) => inner.Write(Compress(data));
+    public byte[] Read() => Decompress(inner.Read());
+}
+IDataSource source = new Encryption(new Compression(new FileDataSource("data.bin")));
+```
 
-**Relations**
-- vs Adapter, Proxy, Composite, Chain of Responsibility, Strategy: see SKILL.md look-alikes.
-- Proxy manages its service's lifecycle itself; decorator composition is always controlled by the client.
-- Prototype helps clone heavily decorated structures.
+* The wrapped reference is typed as the component interface, so a decorator wraps components *or* other decorators.
+* Cost
+   * Hard to remove one wrapper from the middle of a stack.
+   * Hard to make a decorator's behavior independent of its position in the stack.
+   * The assembly code gets ugly; DI-container decoration helps.
 
 ---
 
 ## Facade
 
-**Intent.** Provide a simplified interface to a library, framework, or other complex set of classes.
+Give a complex library, framework or subsystem a simplified interface.
 
-**Use when**
-- You need a limited, straightforward interface to a complex subsystem; most clients need only a few of its features (e.g. "convert this video" over a full video-conversion framework).
-- You want to layer a subsystem: give each layer a facade as its entry point and make layers communicate only through facades, reducing coupling.
+* Use when
+   * most clients need only a few features of a complex subsystem ("convert this video" over a full conversion framework)
+   * you layer a subsystem: each layer gets a facade as its entry point, and layers talk only through facades
 
-**How to implement**
-1. Check that a simpler interface is possible — you're on track if it makes clients independent of many subsystem classes.
-2. Declare and implement that interface in a facade class that redirects calls to the right subsystem objects. The facade initializes the subsystem and manages its lifecycle unless the client already does.
-3. Route all client code through the facade. Now a subsystem upgrade changes only the facade.
-4. If the facade grows too large, extract part of it into an additional, more specific facade.
+```csharp
+// ✗ the client is wired to a dozen framework classes to do one thing
+var file   = new VideoFile(fileName);
+var codec  = CodecFactory.Extract(file);
+var buffer = BitrateReader.Read(file, codec);
+var result = BitrateReader.Convert(buffer, new Mpeg4CompressionCodec());
+var output = new AudioMixer().Fix(result);
 
-**Pros.** Isolates your code from subsystem complexity.
-**Cons.** Can become a god object coupled to every class in the app.
+// ✓ one entry point; a framework upgrade changes only the facade
+var mp4 = new VideoConverter().Convert(fileName, VideoFormat.Mp4);
+```
 
-**Relations**
-- vs Adapter, Mediator, Proxy: see SKILL.md look-alikes.
-- Abstract Factory can replace a facade whose only job is hiding object creation.
-- vs Flyweight: Flyweight makes lots of little objects; Facade makes one object representing a subsystem.
-- A facade usually needs only one instance.
+* The facade initializes the subsystem and manages its lifecycle unless the client already does.
+* If the facade grows too large, extract a second, more specific facade.
+* Cost: it can become a god object coupled to every class in the app.
+* Relations: Abstract Factory can replace a facade that only hides creation. Flyweight makes many small objects; Facade makes one that represents a subsystem. Usually a single instance.
 
 ---
 
 ## Flyweight
-*Also: Cache.*
 
-**Intent.** Fit more objects into available RAM by sharing common state between objects instead of storing it in each one.
+*Also: Cache.* Fit more objects in RAM by sharing common state instead of storing it in each one.
 
-**Use only when** the program must support a huge number of similar objects that barely fit in RAM, *and* those objects carry duplicated state that can be extracted and shared (e.g. particles in a game sharing color and sprite). Otherwise the complexity isn't worth it.
+* Use **only** when a huge number of similar objects barely fits in RAM *and* their duplicated state can be extracted and shared. Otherwise the complexity isn't worth it.
 
-**How to implement**
-1. Split the class's fields into:
-   - **intrinsic state**: unchanging data duplicated across many objects (stays in the flyweight);
-   - **extrinsic state**: contextual data unique to each object (moves out).
-2. Make intrinsic fields immutable, set only in the constructor.
-3. In methods that used extrinsic fields, replace each field with a parameter.
-4. Optionally add a flyweight factory that returns an existing flyweight for a given intrinsic state before creating a new one; clients then obtain flyweights only through it.
-5. Clients store or compute extrinsic state and pass it in. For convenience, move extrinsic state plus the flyweight reference into a separate context class.
+```csharp
+// ✗ one million particles, each holding its own sprite and color
+class Particle { public double X, Y, Speed; public Color Color; public Sprite Sprite; }
 
-**Pros.** Large RAM savings when there really are tons of similar objects.
-**Cons.** May trade RAM for CPU if context data must be recomputed on every call. Code becomes much harder to understand ("why is this entity's state split like this?").
+// ✓ intrinsic state (shared, immutable) vs extrinsic state (per particle, passed in)
+sealed class ParticleType(Color color, Sprite sprite)
+{
+    public void Draw(Canvas canvas, double x, double y) { ... }
+}
+record struct Particle(double X, double Y, double Speed, ParticleType Type);   // Type comes from a factory cache
+```
 
-**Relations**
-- Shared Composite leaves can be flyweights.
-- vs Facade, Singleton: see above and SKILL.md look-alikes.
+* Steps that matter
+   1. Split fields into **intrinsic** (unchanging, duplicated across objects; stays) and **extrinsic** (unique per object; moves out).
+   2. Intrinsic fields are immutable and set only in the constructor.
+   3. Methods that used extrinsic fields take them as parameters.
+   4. A flyweight factory returns the existing flyweight for an intrinsic state before creating a new one; clients get flyweights only through it.
+* Cost: may trade RAM for CPU if context data is recomputed on every call. The code gets much harder to understand ("why is this entity's state split?").
 
 ---
 
 ## Proxy
 
-**Intent.** Provide a substitute for another object that controls access to it, so you can do something before or after a request reaches the original.
+A substitute that controls access to another object, doing work before or after the request reaches it.
 
-**Use when** (common kinds)
-- **Virtual proxy** — lazy initialization of a heavyweight service that is only occasionally needed.
-- **Protection proxy** — only certain clients may use the service.
-- **Remote proxy** — the service lives on another machine; the proxy handles the network details.
-- **Logging proxy** — keep a history of requests.
-- **Caching proxy** — cache results of repeated requests (keyed by parameters) and manage the cache's lifecycle.
-- **Smart reference** — release a heavyweight object when no clients use it any more; track whether clients modified it.
+| Kind | Purpose |
+|---|---|
+| Virtual | Lazy initialization of a heavyweight service that's rarely needed |
+| Protection | Only certain clients may use the service |
+| Remote | The service lives on another machine; the proxy handles the network |
+| Logging | Keep a history of requests |
+| Caching | Cache results of repeated requests (keyed by parameters) and manage the cache's lifecycle |
+| Smart reference | Release a heavyweight object when no client uses it; track modifications |
 
-**How to implement**
-1. If there's no service interface, extract one so proxy and service are interchangeable. If you can't change all the service's clients, make the proxy a subclass of the service instead.
-2. Create the proxy with a field referencing the service. Usually the proxy creates and manages the service itself; occasionally the client passes it in.
-3. Implement each method per its purpose; usually do some work, then delegate.
-4. Consider a creation method (static or factory) that decides whether a client gets the proxy or the real service.
-5. Consider lazy initialization of the service.
+```csharp
+// ✗ every client caches results itself, or none does
+var video = youTube.GetVideo(id);
 
-**Pros.** Control the service without clients knowing. Manage the service's lifecycle when clients don't care. Works even when the service isn't ready or available. OCP: new proxies without changing service or clients.
-**Cons.** More classes. Responses may be delayed.
+// ✓ caching proxy: same interface, clients unchanged
+class CachedYouTube(IYouTube service) : IYouTube
+{
+    private readonly Dictionary<string, Video> cache = new();
+    public Video GetVideo(string id) =>
+        cache.TryGetValue(id, out var video) ? video : cache[id] = service.GetVideo(id);
+}
+```
 
-**Relations**
-- vs Adapter, Decorator, Facade: see SKILL.md look-alikes.
+* Gotchas
+   * No service interface? Extract one so proxy and service are interchangeable. If you can't change every client, subclass the service instead.
+   * The proxy usually creates and manages its service itself; occasionally the client passes it in.
+   * A creation method (static or factory) can decide whether a client gets the proxy or the real service.
+* Cost: more classes; responses may be delayed.

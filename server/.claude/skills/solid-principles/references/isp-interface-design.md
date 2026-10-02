@@ -1,14 +1,24 @@
-# Interface Segregation Principle: designing interfaces
+# Interface Segregation: designing interfaces
+
+## Contents
+- Core idea
+- 1. Split for decoration
+- 2. Split by client need
+- 3. Split by architectural need
+- Supplying segregated interfaces
+- Single-method interfaces
+- Checklist
 
 ## Core idea
 
-Interfaces should be **small** and **shaped by their clients**. Every member of an interface must be implemented by every implementer, *including every decorator and adapter*. Unless every client needs every member, a big interface forces implementations to fulfil a contract nobody uses in full. The test the book uses: **for every member of an interface, there should be a meaningful analogue of each decoration you'd want to apply.**
-
-There are three reasons to split an interface: **decoration**, **client need**, and **architectural need**.
+* Interfaces are **small** and **shaped by their clients**.
+* Every implementer, *including every decorator and adapter*, must implement every member. A big interface forces contracts nobody uses in full.
+* The book's test: **for every member, there should be a meaningful analogue of each decoration you'd want to apply.**
+* Three reasons to split: **decoration**, **client need**, **architectural need**.
 
 ## 1. Split for decoration
 
-Start from a typical generic CRUD interface:
+Start from a generic CRUD interface:
 
 ```csharp
 public interface ICreateReadUpdateDelete<TEntity>
@@ -21,67 +31,104 @@ public interface ICreateReadUpdateDelete<TEntity>
 }
 ```
 
-(Making the *interface* generic rather than each method forces clients to declare the entity type they depend on up front. That keeps dependencies explicit.)
+* A generic *interface* (not generic methods) makes clients declare the entity type up front, which keeps dependencies explicit.
+* Logging and transactions apply to every member. They're cross-cutting, so consider AOP.
+* Other decorators apply to part of the interface, and that creates the pressure to split:
 
-Some decorators apply to every member: logging, transactions. These are cross-cutting, so consider AOP for them. Others apply to only part of the interface, and those create the pressure to split:
+```csharp
+// ✗ delete confirmation on the fat interface: four pass-throughs, and each still needs a test
+class DeleteConfirmation<T>(ICreateReadUpdateDelete<T> inner) : ICreateReadUpdateDelete<T>
+{
+    public void Create(T entity) => inner.Create(entity);
+    public T ReadOne(Guid id) => inner.ReadOne(id);
+    public IEnumerable<T> ReadAll() => inner.ReadAll();
+    public void Update(T entity) => inner.Update(entity);
+    public void Delete(T entity) { if (Confirm()) inner.Delete(entity); }
+}
 
-- **Delete confirmation** decorates only `Delete`. On the big interface it needs four pass-through methods, and each of those *still needs tests* to prove it delegates. Split off `IDelete<T>` and the decorator shrinks to one method. Less code means fewer tests. Taking it further, the prompt itself becomes `IUserInteraction.Confirm(string)` so console, desktop, and web can each supply their own, which is SRP applied inside the decorator.
-- **Caching** applies only to reads, so split off `IRead<T>` (`ReadOne`, `ReadAll`) with a `ReadCaching<T>` decorator.
-- **Create + Update** have identical signatures and the same intent from the client's point of view. Unify them as `ISave<T>.Save` and let the implementation decide insert vs. update. That enables `SaveAuditing<T>(ISave<T> inner, ISave<AuditInfo> auditSave)`.
+// ✓ split off IDelete<T>: the decorator is one method, and the prompt is its own abstraction
+class DeleteConfirmation<T>(IDelete<T> inner, IUserInteraction userInteraction) : IDelete<T>
+{
+    public void Delete(T entity) { if (userInteraction.Confirm("Delete?")) inner.Delete(entity); }
+}
+```
 
-The result is `IRead<T>`, `ISave<T>`, `IDelete<T>`, each with meaningful decorators and no pass-throughs.
-
-**Multi-interface decorators:** one class can decorate several segregated interfaces *when the decoration context is shared*. For example, `ModificationEventPublishing<T> : ISave<T>, IDelete<T>` publishes events for both. Don't combine decorators that pull in different dependencies (event publishing + auditing). Those belong in separate classes and packages.
+* `IUserInteraction.Confirm` lets console, desktop and web supply their own prompt: SRP inside the decorator.
+* **Caching** applies only to reads → `IRead<T>` (`ReadOne`, `ReadAll`) with a `ReadCaching<T>` decorator.
+* **Create + Update** share a signature and, for the client, an intent → unify as `ISave<T>.Save` and let the implementation choose insert or update. That enables `SaveAuditing<T>(ISave<T> inner, ISave<AuditInfo> auditSave)`.
+* Result: `IRead<T>`, `ISave<T>`, `IDelete<T>`, each with meaningful decorators and no pass-throughs.
+* **Multi-interface decorators** are fine *when the decoration context is shared*: `ModificationEventPublishing<T> : ISave<T>, IDelete<T>`. Decorators that pull in different dependencies (event publishing + auditing) belong in separate classes and packages.
 
 ## 2. Split by client need
 
-**Clients need only what they need.** Large interfaces hand clients more power than they should have, blur intent, and invite misuse, and no amount of documentation fully prevents that.
+Large interfaces hand clients more power than they should have, blur intent and invite misuse. No documentation fully prevents that.
 
-- **Read vs. write.** Even a single read/write property can be too much. Split `IUserSettings { string Theme { get; set; } }` into `IUserSettingsReader { string Theme { get; } }` and `IUserSettingsWriter { string Theme { set; } }`. The reading controller can no longer write, and the writer can no longer read. One `UserSettingsConfig` class implements both, and clients never see that.
-  - If writers legitimately need to read, use **segregation plus inheritance**: `IUserSettingsWriter : IUserSettingsReader`. Use methods (`GetTheme`/`SetTheme`) rather than properties, because C# properties don't compose cleanly across interface inheritance.
-- **State-dependent operations.** `IUnauthorized { IAuthorized Login(user, pass); void RequestPasswordReminder(email); }`, where `IAuthorized` holds `ChangePassword`, `AddToBasket`, `Checkout`, `Logout`. Privileged operations become unreachable until the client holds the interface that only a successful login returns.
+* **Read vs write.** Even one read/write property can be too much:
+
+```csharp
+// ✗ the reading controller can also write
+interface IUserSettings { string Theme { get; set; } }
+
+// ✓ each client gets only its half; one class implements both
+interface IUserSettingsReader { string Theme { get; } }
+interface IUserSettingsWriter { string Theme { set; } }
+class UserSettingsConfig : IUserSettingsReader, IUserSettingsWriter { ... }
+```
+
+   * Writers that must also read: `IUserSettingsWriter : IUserSettingsReader`. Use methods (`GetTheme`/`SetTheme`), because C# properties don't compose cleanly across interface inheritance.
+* **State-dependent operations.** Privileged operations stay unreachable until the client holds the interface that only a successful login returns:
+
+```csharp
+interface IUnauthorized { IAuthorized Login(string user, string password); void RequestPasswordReminder(string email); }
+interface IAuthorized   { void ChangePassword(...); void AddToBasket(...); void Checkout(); void Logout(); }
+```
 
 ## 3. Split by architectural need
 
-An `IPersistence` with both queries (`GetAll`, `GetByID`, `FindByCriteria`) and commands (`Save`, `Delete`), where queries use a document store and commands use an ORM, produces an implementation with two unrelated heavy dependencies, and so two reasons to change. Split it into `IPersistenceQueries` and `IPersistenceCommands`, with implementations **in separate packages**, so reusing one doesn't drag in the other's dependency chain. This is CQRS (Command/Query Responsibility Segregation) showing up at the interface level.
+* `IPersistence` holds queries (`GetAll`, `GetByID`, `FindByCriteria`) backed by a document store, and commands (`Save`, `Delete`) backed by an ORM.
+   * One implementation, two unrelated heavy dependencies, two reasons to change.
+* Split into `IPersistenceQueries` and `IPersistenceCommands`, with implementations **in separate packages**, so reusing one doesn't drag in the other's dependency chain.
+* This is CQRS (Command/Query Responsibility Segregation) at the interface level.
 
-## Supplying segregated interfaces to clients
-
-A client that used to take one fat interface now takes several:
+## Supplying segregated interfaces
 
 ```csharp
 public OrderController(IRead<Order> reader, ISave<Order> saver, IDelete<Order> deleter) { ... }
 ```
 
-- **Multiple implementations, multiple instances:** `new OrderController(new Reader<Order>(), new Saver<Order>(), new Deleter<Order>())`. This is the most flexible option, and each part can be decorated independently.
-- **Single implementation, single instance:** `var crud = new CreateReadUpdateDelete<Order>(); new OrderController(crud, crud, crud);`. Passing the same instance three times looks odd but is correct: each parameter asks for a different facet. This works best for the **leaf** implementation (the one that does the real work with a specific ORM or library), because all operations share that context. Decorators and adapters are usually per interface.
-- A generic client (`GenericController<TEntity>`) forces all three dependencies to agree on the entity type.
+| Option | Code | When |
+|---|---|---|
+| One instance per interface | `new OrderController(new Reader<Order>(), new Saver<Order>(), new Deleter<Order>())` | Most flexible; each part decorated independently |
+| One instance, passed three times | `var crud = new CreateReadUpdateDelete<Order>(); new OrderController(crud, crud, crud);` | The **leaf** implementation (real ORM or library work) where all operations share context. Looks odd, is correct: each parameter asks for a different facet |
+
+* A generic client (`GenericController<TEntity>`) forces all three dependencies to agree on the entity type.
 
 ### Anti-pattern: Interface Soup
 
 ```csharp
+// ✗ re-merging the parts, usually to avoid the "same instance three times" look
 interface IInterfaceSoup<T> : IRead<T>, ISave<T>, IDelete<T> { }
 ```
 
-Re-merging segregated interfaces, usually to avoid the "same instance three times" look, puts back every cost of the fat interface: implementers and decorators must cover everything again. Don't do it.
+It brings back every cost of the fat interface: implementers and decorators must cover everything again.
 
 ## Single-method interfaces
 
-Taken to its conclusion, ISP gives the most composable interfaces of all:
+ISP taken to its conclusion gives the most composable interfaces:
 
 ```csharp
-public interface ITask              { void Do(); }                 // fire-and-forget; can even be decorated async
+public interface ITask              { void Do(); }                 // fire-and-forget; can be decorated async
 public interface IAction<TContext>  { void Do(TContext context); }
 public interface IFunction<TReturn> { TReturn Do(); }
-public interface IPredicate         { bool Test(); }               // encapsulates an if / loop condition
+public interface IPredicate         { bool Test(); }               // encapsulates an if or loop condition
 ```
 
-They look like delegates (`Action`, `Func`, `Predicate`), but interfaces are more versatile. They can be decorated, adapted, and composed, and an implementation can carry extra context through its constructor or through other interfaces it implements.
+They mirror `Action`, `Func` and `Predicate`, but interfaces can be decorated, adapted and composed, and an implementation can carry extra context through its constructor.
 
 ## Checklist
 
-- Does any decorator, adapter, or test double have pass-through or `throw NotImplemented` members? Then split.
-- Do different clients use disjoint subsets of the members? Then split by client.
-- Would the implementation need two unrelated infrastructure dependencies? Then split by architecture and package separately.
-- Did someone build an aggregate "soup" interface? Then remove it.
-- Interface segregation is far cheaper to get right at design time than to refactor in later. Think about it whenever you *create* an interface.
+* A decorator, adapter or test double has pass-through or `throw NotImplemented` members → split.
+* Clients use disjoint subsets of the members → split by client.
+* The implementation would need two unrelated infrastructure dependencies → split by architecture and package separately.
+* Someone built an aggregate "soup" interface → remove it.
+* Segregation is far cheaper at design time than as a refactor. Think about it whenever you *create* an interface.

@@ -1,42 +1,49 @@
-# Liskov Substitution Principle: contracts and variance
+# Liskov Substitution: contracts and variance
 
 ## Contents
-- Definition and the three ingredients
-- Contracts: preconditions, postconditions, data invariants
-- The LSP contract rules (with failure examples)
-- Implementing contracts (guard clauses, modern .NET notes)
-- Variance: covariance, contravariance, invariance
-- The exception rule
-- Smells that signal LSP violations
+- Definition
+- The rules at a glance
+- Contracts: preconditions, postconditions, invariants
+- Implementing contracts
+- Variance
+- Exceptions
+- Smells
 
 ## Definition
 
-> If S is a subtype of T, then objects of type T may be replaced with objects of type S without breaking the program.
+> If S is a subtype of T, objects of type T may be replaced with objects of type S without breaking the program.
 
-There are three ingredients: the **base type** clients hold a reference to, the **subtype** actually supplied, and the **context** in which the client uses it. LSP is about the client's behavior staying correct no matter which subtype it gets. If a new subtype forces clients to change, the hierarchy is broken. In that sense LSP is what lets OCP and SRP work.
+* Three ingredients: the **base type** the client holds, the **subtype** actually supplied, and the **context** of use.
+* The client must stay correct whichever subtype it gets. A new subtype that forces client changes means the hierarchy is broken.
+* LSP is what lets OCP and SRP work.
 
-The rules come in two groups:
+## The rules at a glance
 
-- **Contract rules:** preconditions can't be strengthened, postconditions can't be weakened, and supertype invariants must be preserved.
-- **Variance rules:** method parameters are contravariant, return types are covariant, and no new exceptions are thrown outside the existing exception hierarchy.
+The running example is a `ShippingStrategy` hierarchy:
+
+| Rule | ✗ Violation | What breaks |
+|---|---|---|
+| Preconditions can't be strengthened | Base accepts a `null` destination; `WorldWideShippingStrategy` throws on `null` | Every client written against the base; no caller can satisfy both contracts |
+| Postconditions can't be weakened | Base guarantees cost > 0; a subtype returns 0 for domestic | A client dividing by the cost throws `DivideByZeroException` on domestic orders |
+| Invariants must be preserved | Subtype adds an unguarded public `FlatRate` setter | `-1` is accepted |
+| Parameters contravariant, returns covariant | Client downcasts the returned `Entity` to `User` | Variance is worked around, not modeled |
+| No new exception types | `UserRepository` throws an unrelated `UserNotFoundException` | Clients must know every implementation's exceptions |
+
+A base-class contract test suite catches these immediately: it fails for the offending subtype.
 
 ## Contracts
 
-A method signature says almost nothing about expectations. `decimal CalculateShippingCost(float packageWeightInKilograms, Size<float> packageDimensionsInInches, RegionInfo destination)` doesn't tell you that a negative weight is invalid. Good names help a lot (units in parameter names prevent centimeter/pound mix-ups), but the **contract** lives in code.
+A signature says almost nothing. `decimal CalculateShippingCost(float packageWeightInKilograms, Size<float> packageDimensionsInInches, RegionInfo destination)` doesn't say that a negative weight is invalid. Units in names help, but the **contract** lives in code.
 
-- **Precondition:** something that must hold before the method can run correctly. Enforce it with guard clauses at the top that throw specific exceptions naming the parameter (`ArgumentOutOfRangeException(nameof(weight), "must be positive")`). Preconditions may only reference parameters and **publicly visible** state, because a client must be able to check them before calling.
-- **Postcondition:** something guaranteed on exit, such as a valid return value or valid state. Check it at the end, after all mutation.
-- **Data invariant:** a predicate true for the object's whole lifetime. Guard it in the constructor, and in the setter if it can change. Keep the field private and route all writes, including writes from the class's own methods, through the guarded property.
+* **Precondition:** must hold before the method runs.
+   * Guard clauses at the top, throwing specific exceptions that name the parameter: `ArgumentOutOfRangeException(nameof(weight), "must be positive")`.
+   * Reference only parameters and **publicly visible** state, so a client can check before calling.
+* **Postcondition:** guaranteed on exit (a valid return value or state). Check it at the end, after all mutation.
+* **Data invariant:** true for the object's whole lifetime.
+   * Guard it in the constructor and in any setter.
+   * Keep the field private and route every write, including the class's own, through the guarded property.
 
-**Encapsulation beats repeated contracts.** If "weight must be positive" appears in every method that takes a weight, it is really an invariant of a missing **value type** (`Weight`, `FlatRate`, `Money`). Promote it, and the precondition disappears into the type.
-
-## The contract rules, by failure
-
-**Preconditions cannot be strengthened.** `ShippingStrategy` accepts a `null` destination. A subclass `WorldWideShippingStrategy` adds `if (destination == null) throw`. Every client written against the base can now blow up, and no caller can satisfy both contracts. Tests show this immediately: a base-class contract test suite (an abstract test fixture run against every subtype) fails for the subtype.
-
-**Postconditions cannot be weakened.** The base guarantees cost > 0. The subtype returns 0 for domestic shipping. A client that divides by the cost now throws `DivideByZeroException` on domestic orders, a defect that came purely from substituting the subtype.
-
-**Invariants must be preserved.** The base keeps `flatRate` positive and read-only. The subtype adds a public `FlatRate` setter with no guard, and now `-1` is accepted. Fix it in the base: a private field plus a **protected guarded property**, so no subclass *can* write the field directly.
+Fix an invariant in the base, so no subclass *can* write the field directly:
 
 ```csharp
 public class ShippingStrategy
@@ -47,48 +54,74 @@ public class ShippingStrategy
     {
         get => flatRate;
         set => flatRate = value > 0m ? value
-             : throw new ArgumentOutOfRangeException(nameof(value), "Flat rate must be positive and non-zero");
+             : throw new System.ArgumentOutOfRangeException(nameof(value), "Flat rate must be positive and non-zero");
     }
 }
 ```
 
+**Encapsulation beats repeated contracts.** A precondition repeated in every method is an invariant of a missing value type:
+
+```csharp
+// ✗ "weight must be positive" guarded in every method that takes a weight
+decimal CalculateShippingCost(float weightInKilograms, ...) { if (weightInKilograms <= 0) throw ...; ... }
+
+// ✓ the value type owns the invariant; the precondition disappears
+public readonly record struct Weight
+{
+    public float Kilograms { get; }
+    public Weight(float kilograms) => Kilograms = kilograms > 0 ? kilograms : throw new System.ArgumentOutOfRangeException(nameof(kilograms));
+}
+decimal CalculateShippingCost(Weight weight, ...) { ... }
+```
+
 ## Implementing contracts
 
-- **Manual guard clauses** work everywhere. In modern .NET, prefer the throw helpers: `ArgumentNullException.ThrowIfNull(x)` and `ArgumentOutOfRangeException.ThrowIfNegativeOrZero(x)`.
-- The book covers **Microsoft Code Contracts** (`Contract.Requires/Ensures/Invariant`, `[ContractInvariantMethod]`, and interface contracts via `[ContractClass]`/`[ContractClassFor]`). That library is **not supported on .NET Core / .NET 5+**. Its lasting lesson is still useful: define the contract **once per interface** so every implementation inherits it. Today you'd do that with:
-  - an abstract **contract test suite** that every implementation's test class inherits (the book's `ShippingStrategyTestsBase` pattern), and/or
-  - a Template Method base whose public non-virtual method checks pre- and postconditions and calls a protected abstract core.
-- Nullable reference types and value objects move many contracts into the type system, which is better still.
-- **Don't catch contract violations.** A broken contract means a bug, not a recoverable condition. Let it fail: global error page or friendly crash dialog, with the full stack trace and context logged. Catch them in tests, which means **unit-test your contracts**.
+* **Guard clauses** work everywhere. Modern .NET throw helpers: `ArgumentNullException.ThrowIfNull(x)`, `ArgumentOutOfRangeException.ThrowIfNegativeOrZero(x)`.
+* **Microsoft Code Contracts** (`Contract.Requires/Ensures/Invariant`), which the book covers, is **not supported on .NET Core / .NET 5+**. Its lesson stands: define the contract **once per interface** so every implementation inherits it. Today:
+   * an abstract **contract test suite** that every implementation's test class inherits (the book's `ShippingStrategyTestsBase`), and/or
+   * a Template Method base: a public non-virtual method checks pre- and postconditions and calls a protected abstract core.
+* Nullable reference types and value objects move many contracts into the type system, which is better still.
+* **Don't catch contract violations.** A broken contract is a bug, not a recoverable condition. Fail fast (global error page or crash dialog) and log the full stack trace. Catch them in tests instead: **unit-test your contracts**.
 
 ## Variance
 
-Variance describes how subtyping of `T` carries over to types built from `T`.
+How subtyping of `T` carries over to types built from `T`:
 
-- **Covariance** (`out T`, return positions) preserves the direction: `ICovariant<Subtype>` is usable as `ICovariant<Supertype>`. Example: `IEntityRepository<out TEntity> where TEntity : Entity { TEntity GetByID(Guid id); }`, so `UserRepository : IEntityRepository<User>` hands clients a `User` without downcasting. The `where` constraint keeps the generic version from being *more* permissive than the original.
-- **Contravariance** (`in T`, parameter positions) reverses the direction: an `IEqualityComparer<Entity>` can be used where an `IEqualityComparer<User>` is required. A more general consumer substitutes for a more specific one.
-- **Invariance**: neither applies. `IDictionary<TKey, TValue>` is invariant because each type parameter appears in both input and output positions.
+| Kind | Position | Direction | Example |
+|---|---|---|---|
+| Covariance (`out T`) | Return values | Preserved: `I<User>` usable as `I<Entity>` | `IEntityRepository<out TEntity> where TEntity : Entity { TEntity GetByID(Guid id); }`: `UserRepository` returns a `User` with no downcast |
+| Contravariance (`in T`) | Parameters | Reversed: `I<Entity>` usable as `I<User>` | An `IEqualityComparer<Entity>` works where `IEqualityComparer<User>` is required |
+| Invariance | Both | Neither | `IDictionary<TKey, TValue>`: each parameter is both input and output |
 
-LSP needs **contravariant parameters and covariant returns** in subtypes. Language notes:
+* LSP needs contravariant parameters and covariant returns in subtypes. The `where` constraint keeps the generic version from being *more* permissive than the original.
+* C# variance annotations exist only on generic interfaces and delegates.
+* Since C# 9, overrides may declare covariant return types (`public override User GetByID(...)` over `Entity GetByID(...)`). The book predates this and uses generics. Both are fine.
+* Overridden parameters stay invariant in C#. Java uses `? extends` / `? super`; Kotlin uses `out` / `in`.
+* Downcasting or type-sniffing a return value (`if (entity is User user)`) is the symptom of variance being worked around.
 
-- C# variance annotations exist only on generic interfaces and delegates.
-- Since **C# 9**, overrides *may* declare covariant return types (`public override User GetByID(...)` overriding `Entity GetByID(...)`). The book predates this and works around it with generics. Both are fine.
-- Overridden *parameters* are still invariant in C#. In Java, use `? extends` / `? super`; in Kotlin, `out` / `in`.
+## Exceptions
 
-Downcasting or type-sniffing a returned value (`if (entity is User u)`) is the symptom that tells you variance is being worked around rather than modeled.
+* Exceptions separate *reporting* an error from *handling* it.
+   * Catch only where you can do something meaningful: roll back, show an error UI.
+   * Never catch and ignore. Avoid catching base `Exception`, which also catches unrecoverable failures.
+* Give each interface a base exception:
 
-## The exception rule
+```csharp
+// ✗ unrelated types: a client of IEntityRepository must know every implementation, or catch Exception
+class EntityNotFoundException : System.Exception { }
+class UserNotFoundException   : System.Exception { }
 
-Exceptions separate *reporting* an error from *handling* it. Catch only where you can do something meaningful (roll back, show an error UI). Never catch-and-ignore, and avoid catching base `Exception`, which also catches unrecoverable failures.
+// ✓ implementation-specific exceptions derive from the interface's base exception
+class EntityNotFoundException : System.Exception { }
+class UserNotFoundException   : EntityNotFoundException { }
+```
 
-If `EntityRepository.GetByID` throws `EntityNotFoundException` and `UserRepository.GetByID` throws an unrelated `UserNotFoundException`, a client holding `IEntityRepository` must know about every implementation's exception, or catch `Exception`, and every new implementation forces client edits. **Give each interface a base exception and derive implementation-specific exceptions from it** (`UserNotFoundException : EntityNotFoundException`).
+## Smells that signal a violation
 
-## Smells that signal an LSP violation
+* An override throws `NotImplementedException` / `NotSupportedException`. Example: a static `HeatDetector.Move()` in a `Sensor` hierarchy that assumes every sensor moves. The base is a premature abstraction; split it into capability interfaces ([dip-and-abstraction-design.md](dip-and-abstraction-design.md)).
+* Clients decide behavior with `x is SpecialSubtype` or `x as SpecialSubtype`.
+* Empty overrides of base methods that don't apply.
+* Rectangle/Square-style mutation conflicts: a subtype can't honor a base setter's independent behavior.
+* A contract test suite that has to be *skipped* for one subtype.
 
-- An override that throws `NotImplementedException` / `NotSupportedException` (e.g. a static `HeatDetector.Move()` in a `Sensor` hierarchy that assumes every sensor moves). The base type is a premature abstraction; split it into capability interfaces (see dip-and-abstraction-design.md).
-- Clients doing `if (x is SpecialSubtype)` or `x as SpecialSubtype` to decide behavior.
-- Subclasses that ignore a base method (empty override) because it doesn't apply.
-- The classic Rectangle/Square-style mutation conflicts: a subtype that can't honor a base setter's independent behavior.
-- A contract test suite that has to be *skipped* for one subtype.
-
-Treat any LSP violation as technical debt that gets more expensive the longer it stays. Pay it down early.
+Treat a violation as technical debt that grows more expensive the longer it stays. Pay it down early.

@@ -1,60 +1,54 @@
-# Single Responsibility Principle and the patterns that enforce it
+# Single Responsibility and the patterns that enforce it
 
 ## Contents
-- Definition and how to find responsibilities
-- The two-stage refactor (clarity, then abstraction)
-- Rules for the extracted interfaces
-- Adapter: turning third-party into first-party
-- The Decorator family (composite, predicate, branching, lazy, logging, profiling)
+- Definition and finding responsibilities
+- The two-stage refactor
+- Rules for extracted interfaces
+- Adapter
+- Decorator and its variants
 - Limits
 
 ## Definition
 
-A class (or method, or module) should have **one and only one reason to change**. When a class has several reasons, it has several responsibilities. Give each responsibility to another class behind an abstraction, and keep in the original class only the part that coordinates them.
+A class, method or module has **one reason to change**. Several reasons mean several responsibilities: give each to another class behind an abstraction, and keep only the coordination.
 
 ### Finding responsibilities
 
-Describe what the code does, step by step. Then, for each step, ask what real-world change would force an edit. The book's running example is a `TradeProcessor.ProcessTrades(Stream)` that reads lines, parses and validates fields, logs warnings to the console, maps to records, and inserts through a stored procedure. It changes when any of the following happen:
+Describe the code step by step, then ask which real-world change would force an edit to each step. The book's running example is `TradeProcessor.ProcessTrades(Stream)`. It reads lines, parses and validates fields, logs warnings to the console, maps the lines to records, and inserts them through a stored procedure. It must change when:
 
-- the input source changes (a stream becomes a web service)
-- the input format changes (a new "broker" field)
-- the validation rules change
-- the logging destination changes (console doesn't work in a hosted service)
-- the storage changes (a stored-procedure parameter, a document DB, storage moved behind an API)
+* the input source changes (stream → web service)
+* the input format changes (a new broker field)
+* the validation rules change
+* the log destination changes (console doesn't work in a hosted service)
+* the storage changes (a stored-procedure parameter, a document DB, an API)
 
-Each of these is a responsibility, and for each one, `TradeProcessor` would have to be edited.
+Five reasons to change, so five responsibilities.
 
 ## The two-stage refactor
 
-### Stage 1: refactor for clarity
+### Stage 1: clarity
 
-Extract a method per responsibility so the top-level method reads like the process:
+Extract one method per responsibility so the top method reads as the process:
 
 ```csharp
 public void ProcessTrades(Stream stream)
 {
     var lines  = ReadTradeData(stream);
-    var trades = ParseTrades(lines);      // delegates to ValidateTradeData + MapTradeDataToTradeRecord
-    StoreTrades(trades);                  // logging goes through a LogMessage helper
+    var trades = ParseTrades(lines);   // → ValidateTradeData + MapTradeDataToTradeRecord
+    StoreTrades(trades);               // logs through a LogMessage helper
 }
 ```
 
-This step is worth doing on its own because it is cheap and makes the code readable. It does **not** make the code adaptive: changing how logging works still means editing this class. Treat it as a stepping stone.
+* Cheap and readable, but not adaptive: changing the logging still edits this class.
+* A legitimate stopping point for code you don't expect to change.
 
-### Stage 2: refactor for abstraction
+### Stage 2: abstraction
 
-Move each responsibility into its own class behind an interface, and inject the interfaces:
+Move each responsibility behind an interface and inject it:
 
 ```csharp
-public class TradeProcessor
+public class TradeProcessor(ITradeDataProvider provider, ITradeParser parser, ITradeStorage storage)
 {
-    private readonly ITradeDataProvider provider;
-    private readonly ITradeParser parser;
-    private readonly ITradeStorage storage;
-
-    public TradeProcessor(ITradeDataProvider provider, ITradeParser parser, ITradeStorage storage)
-    { this.provider = provider; this.parser = parser; this.storage = storage; }
-
     public void ProcessTrades()
     {
         var lines  = provider.GetTradeData();
@@ -64,74 +58,98 @@ public class TradeProcessor
 }
 ```
 
-`TradeProcessor` now holds the blueprint of the process and nothing else. Its only reason to change is a change to the process itself. Repeat **recursively**: `SimpleTradeParser` delegates to `ITradeValidator` and `ITradeMapper`, and validator and storage both log through an `ILogger`.
+* `TradeProcessor` now holds only the blueprint of the process. Its one reason to change is a change to the process itself.
+* Repeat recursively: `SimpleTradeParser` delegates to `ITradeValidator` and `ITradeMapper`, and the validator and storage log through `ILogger`.
 
-Once the refactor is done, every original change request becomes "add or replace one implementation":
+Every original change becomes "add or replace one implementation":
 
 | Change | Handled by |
 |---|---|
 | Read from a web service | New `ITradeDataProvider` |
-| New broker field | Edit validator, mapper, and storage implementations only |
-| New validation rules | Edit or replace the `ITradeValidator` implementation |
-| New log destination | Logging adapter (e.g. `Log4NetLoggerAdapter : ILogger`) |
-| Document DB / web service storage | New `MongoTradeStorage` / `WebServiceTradeStorage` |
+| New broker field | Validator, mapper and storage implementations only |
+| New validation rules | Replace the `ITradeValidator` implementation |
+| New log destination | Logging adapter (`Log4NetLoggerAdapter : ILogger`) |
+| Document DB or web service storage | New `MongoTradeStorage` / `WebServiceTradeStorage` |
 
-## Rules for the extracted interfaces
+## Rules for extracted interfaces
 
-- **Keep technology out of interface signatures.** `ITradeDataProvider.GetTradeData()` takes no `Stream`. Instead, `StreamTradeDataProvider` receives the `Stream` in its *constructor*. Constructors can depend on anything without polluting the interface.
-- **Naming convention.** Drop the `I` and prefix the implementation context: `StreamTradeDataProvider`, `AdoNetTradeStorage`, `DapperTradeStorage`. Use `Simple…` for implementations with no special dependency.
-- **Packaging.** Interfaces go in their own package. Implementations that share only core-framework dependencies can share a package. An implementation that pulls in a third-party or non-core dependency gets its own package (e.g. `Services.Dapper`), so clients never inherit that dependency transitively. See the Stairway pattern in dip-and-abstraction-design.md.
-- **Return read-only shapes** (`IEnumerable<T>` rather than `List<T>`) so later steps can't mutate what earlier steps produced.
+* **Keep technology out of interface signatures.** Constructors can depend on anything without polluting the interface.
+
+```csharp
+// ✗ every implementation must accept a Stream
+interface ITradeDataProvider { IEnumerable<string> GetTradeData(Stream stream); }
+
+// ✓ the context goes into the implementation's constructor
+interface ITradeDataProvider { IEnumerable<string> GetTradeData(); }
+class StreamTradeDataProvider(Stream stream) : ITradeDataProvider { ... }
+```
+
+* **Naming:** drop the `I` and prefix the implementation context (`StreamTradeDataProvider`, `AdoNetTradeStorage`, `DapperTradeStorage`). Use `Simple…` when there is no special dependency.
+* **Packaging:** interfaces get their own package. An implementation that pulls in a third-party dependency gets its own package too (`Services.Dapper`), so clients never inherit it transitively. See the Stairway in [dip-and-abstraction-design.md](dip-and-abstraction-design.md).
+* **Return read-only shapes** (`IEnumerable<T>`, not `List<T>`) so later steps can't mutate what earlier steps produced.
 
 ## Adapter: third-party → first-party
 
-An adapter implements *your* interface and delegates to a third-party type:
+The adapter implements *your* interface and delegates to the third-party type:
 
 ```csharp
-public class Log4NetLoggerAdapter : ILogger
+public class Log4NetLoggerAdapter(ILog log) : ILogger
 {
-    private readonly ILog log;
-    public Log4NetLoggerAdapter(ILog log) { this.log = log; }
     public void LogWarning(string message, params object[] args) => log.WarnFormat(message, args);
 }
 ```
 
-With the adapter in place, only the composition root and the adapter's own package reference log4net. Everything else depends on `ILogger`. Adapters also smooth over semantic mismatches. The book's `StopwatchAdapter : IStopwatch` calls `Stop`, reads the elapsed time, then `Reset`s, because `Stopwatch.Start` *resumes* rather than restarting.
+* Only the composition root and the adapter's package reference log4net. Everything else sees `ILogger`.
+* Adapters also fix semantic mismatches. `StopwatchAdapter : IStopwatch` calls `Stop`, reads the elapsed time and then `Reset`s, because `Stopwatch.Start` *resumes* instead of restarting.
+* Pragmatic exception: for a truly ubiquitous cross-cutting library, depending on its types directly can be the better trade. Decide it deliberately.
 
-> Pragmatic exception: for truly ubiquitous cross-cutting libraries, depending on the third-party type directly can be the better trade. Decide this deliberately.
+## Decorator
 
-## The Decorator pattern
-
-A decorator **implements an interface and wraps another instance of the same interface**. It adds behavior before or after delegating, and the client can't tell it's there. Use it when some functionality is too entangled with a class's intent to move out any other way.
+A decorator implements an interface and wraps another instance of the same interface. It adds behavior before or after delegating, and the client can't tell. Use it when a concern is too entangled with a class's intent to move out any other way.
 
 ```csharp
-public class LoggingCalculator : ICalculator
+public class LoggingCalculator(ICalculator inner) : ICalculator
 {
-    private readonly ICalculator inner;
-    public LoggingCalculator(ICalculator inner) { this.inner = inner; }
     public int Add(int x, int y)
     {
-        Console.WriteLine($"Add(x={x}, y={y})");
+        System.Console.WriteLine($"Add(x={x}, y={y})");
         var result = inner.Add(x, y);
-        Console.WriteLine($"result={result}");
+        System.Console.WriteLine($"result={result}");
         return result;
     }
 }
-// composition root: ICalculator calc = new LoggingCalculator(new ConcreteCalculator());
+// composition root: ICalculator calculator = new LoggingCalculator(new ConcreteCalculator());
 ```
 
 ### Variants
 
-- **Composite.** Implements `IComponent` and holds a list of `IComponent`s, forwarding each call to all of them, so clients treat many as one. `Add`/`Remove` aren't on the interface; the factory or composition root populates the composite. The children can be different concrete types, or other composites, which gives you trees.
-- **Predicate decorator.** Hides conditional execution from the client: `PredicatedComponent(IComponent inner, IPredicate predicate)` calls `inner` only when `predicate.Test()` is true. This beats both a client that `new`s a `DateTester` and a client whose method gains a `DateTester` parameter, which breaks its public interface. Prefer an `IPredicate` interface over `Func<bool>`, because interfaces can themselves be decorated, adapted, and composed.
-- **Branching decorator.** `BranchedComponent(IComponent whenTrue, IComponent whenFalse, IPredicate predicate)`.
-- **Lazy decorator.** Don't hand clients a `Lazy<IComponent>`, because that forces laziness on every caller. Wrap it instead: `LazyComponent(Lazy<IComponent>) : IComponent`, so the client sees a plain `IComponent`.
-- **Logging decorator.** Removes logging noise from implementations. Limits: it can't see private state, and it needs one decorator per interface. For logging that touches everything, prefer aspect-oriented programming (an interceptor or attribute-based aspect).
-- **Profiling decorator.** `ProfilingComponent(IComponent inner, IStopwatch stopwatch)` times calls. First extract `IStopwatch` so the stopwatch can be decorated too (`LoggingStopwatch : IStopwatch`). Replacing a concrete dependency with an interface is often the step that must come before any decorator.
-- **Properties and events** can be decorated too. Write explicit get/set or add/remove accessors that delegate to the inner instance; auto-properties and auto-events can't be decorated.
+* **Composite:** holds a list of `IComponent`s and forwards each call to all of them, so clients treat many as one.
+   * `Add`/`Remove` stay off the interface; the composition root populates it.
+   * Children can be other composites, which gives you trees.
+* **Predicate decorator:** hides a condition from the client.
 
-## Limits and judgment
+```csharp
+// ✗ the client owns the condition and depends on its source
+if (dateTester.TodayIsAnEvenDayOfTheMonth) component.Something();
 
-- SRP yields **more, smaller classes**. That is the point, but it does spread logic across files. Spend that cost only where change is predicted (see ocp-and-protected-variation.md).
-- Stage 1 alone is a legitimate stopping point for code you don't expect to change.
-- Interfaces with very many members make decorators painful. That is the signal to apply ISP.
+// ✓ the condition is a decorator; the client just calls
+IComponent component = new PredicatedComponent(new RealComponent(), new TodayIsAnEvenDayOfTheMonthPredicate());
+component.Something();
+```
+
+   * This beats both a client that `new`s a `DateTester` and a method that gains a `DateTester` parameter, which breaks its public interface.
+   * Prefer `IPredicate` over `Func<bool>`, because an interface can itself be decorated, adapted and composed.
+* **Branching decorator:** `BranchedComponent(IComponent whenTrue, IComponent whenFalse, IPredicate predicate)`.
+* **Lazy decorator:** `LazyComponent(Lazy<IComponent>) : IComponent`. Handing clients a `Lazy<IComponent>` forces laziness on every caller; the decorator hides it.
+* **Logging decorator:** removes logging noise from implementations.
+   * Limits: it can't see private state, and it takes one decorator per interface.
+   * For logging that touches everything, prefer AOP (an interceptor or an attribute-based aspect).
+* **Profiling decorator:** `ProfilingComponent(IComponent inner, IStopwatch stopwatch)` times calls.
+   * First extract `IStopwatch` so the stopwatch can be decorated too (`LoggingStopwatch : IStopwatch`).
+   * Replacing a concrete dependency with an interface is often the step that must come before any decorator.
+* **Properties and events:** write explicit get/set or add/remove accessors that delegate. Auto-properties and auto-events can't be decorated.
+
+## Limits
+
+* SRP yields more, smaller classes. That's the point, but it spreads logic across files. Pay that cost only where change is predicted ([ocp-and-protected-variation.md](ocp-and-protected-variation.md)).
+* An interface with very many members makes decorators painful. That's the signal to apply ISP.
