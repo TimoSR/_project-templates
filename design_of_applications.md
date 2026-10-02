@@ -5,4 +5,4 @@ Deal
     Settings
     ...
 
-Overly generic collections hurts the ease of use.
+Overly generic collections hurts the ease of use. 
