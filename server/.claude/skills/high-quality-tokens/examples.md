@@ -55,7 +55,7 @@ class CryptoPayment : IPaymentProcessor { public void Pay(decimal amount) { ... 
 ```csharp
 // ✗ Bird promises Fly(); Penguin can't keep it
 abstract class Bird { public abstract void Fly(); }
-class Penguin : Bird { public override void Fly() => throw new System.NotSupportedException(); }
+class Penguin : Bird { public override void Fly() { throw new System.NotSupportedException(); } }
 
 // ✓ the base type promises only what every subtype can do
 abstract class Bird { public abstract void Move(); }
@@ -88,8 +88,8 @@ OrderService ──→ ILogger ←── ConsoleLogger
 ```
 
 ```csharp
-class OrderService(ILogger logger) { ... }              // doesn't know which logger it gets
-var orderService = new OrderService(new FileLogger()); // chosen where the app is wired up
+class OrderService { public OrderService(ILogger logger) { ... } } // doesn't know which logger it gets
+var orderService = new OrderService(new FileLogger());              // chosen where the app is wired up
 ```
 
 ---
@@ -267,69 +267,16 @@ npx -p @mermaid-js/mermaid-cli mmdc -i diagram.mmd -o diagram.svg   # fails on a
 
 ## 4. House style for notes and rules
 
-Nested bullets, one idea per line, fragments, no prose intros. Each parent is an idea and its children refine it.
+Nested bullets, one idea per line, fragments, no prose intros. Each parent is an idea and its children refine it. The full set of notes in this form is `.claude/CLAUDE.md` § How We Work.
 
 ```markdown
-* KISS
-* what feature do we want
-* what is the data
-   * what data views do we need to support
-* what is the flow
-* what are the inputs, outputs and side effects of the flow
-* what is the simplest functional form of the logic we want to implement
-   * from there we can worry about objects and organisation
-* start by writing it in one file, break it apart after
 * less code is better
    * does not mean more compact code that is hard to read
    * code not written is less to debug
 * go back to the basics
-   * return the object type we create
-   * use Booleans
    * fail early
       * DTO (request / command)
    * no exceptions in the domain
-   * the domain controls what is valid
-* use tests to replicate bugs
-* the work saved is time gained
-* data layout
-* how do we want to process / transform the data
-   * do we want to keep the original form?
-   * do we want to keep the in-between?
-* should we include metadata
-* in any system, layers are the foundation for complex systems
-   * a node within a graph can be a graph
-   * a node within a graph can be a tree
-   * an image is layers of color
-   * audio is layers of sounds
-
-Data State
-* In process
-* Persistence
-* Cache
-* Events
-
-Base Computer Science Rules
-* Speed vs Simplicity
-* Speed vs Memory vs Accuracy
-* Lossless vs Lossy
-* Compression vs Time
-
-* Storing Data
-   * Short: Cache
-   * Medium: RAM
-   * Long: Storage (different formats)
-   * Indexed: Database
-* Scheduling & Synchronization
-   * every program/system can be viewed as a network of nodes
-      * latency
-      * time of transfer
-   * the scale does not matter
-      * CPU, memory and GPU communicating together
-      * communication of processes
-      * application communication
-      * the World Wide Web
-   * data doesn't just move; it waits to move, and that waiting is 90% of what software engineering actually manages
-* actual data instead of guesses
-   * use CLI tools to gather data
-   * use debuggers to track bugs
 ```
+
+* Fragments suit personal notes and every-session reminders, where the reader already knows the topic. A rule that someone new must apply also gets its example (§1, §2).

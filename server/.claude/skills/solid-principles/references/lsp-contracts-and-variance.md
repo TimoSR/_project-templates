@@ -49,12 +49,15 @@ Fix an invariant in the base, so no subclass *can* write the field directly:
 public class ShippingStrategy
 {
     private decimal flatRate;
-    public ShippingStrategy(decimal flatRate) => FlatRate = flatRate;
+    public ShippingStrategy(decimal flatRate) { FlatRate = flatRate; }
     protected decimal FlatRate
     {
-        get => flatRate;
-        set => flatRate = value > 0m ? value
-             : throw new System.ArgumentOutOfRangeException(nameof(value), "Flat rate must be positive and non-zero");
+        get { return flatRate; }
+        set
+        {
+            if (value <= 0m) { throw new System.ArgumentOutOfRangeException(nameof(value), "Flat rate must be positive and non-zero"); }
+            flatRate = value;
+        }
     }
 }
 ```
@@ -63,13 +66,17 @@ public class ShippingStrategy
 
 ```csharp
 // ✗ "weight must be positive" guarded in every method that takes a weight
-decimal CalculateShippingCost(float weightInKilograms, ...) { if (weightInKilograms <= 0) throw ...; ... }
+decimal CalculateShippingCost(float weightInKilograms, ...) { if (weightInKilograms <= 0) { throw ...; } ... }
 
 // ✓ the value type owns the invariant; the precondition disappears
 public readonly record struct Weight
 {
     public float Kilograms { get; }
-    public Weight(float kilograms) => Kilograms = kilograms > 0 ? kilograms : throw new System.ArgumentOutOfRangeException(nameof(kilograms));
+    public Weight(float kilograms)
+    {
+        if (kilograms <= 0) { throw new System.ArgumentOutOfRangeException(nameof(kilograms)); }
+        Kilograms = kilograms;
+    }
 }
 decimal CalculateShippingCost(Weight weight, ...) { ... }
 ```

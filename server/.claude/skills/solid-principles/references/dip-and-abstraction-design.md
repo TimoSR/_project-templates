@@ -5,7 +5,6 @@
 - Why `new` is a code smell
 - Package structure: Entourage vs Stairway
 - Designing good abstractions
-- Checklist
 
 ## Definition
 
@@ -32,7 +31,8 @@ public class AccountController
     private readonly ISecurityService securityService;
     public AccountController(ISecurityService securityService)
     {
-        this.securityService = securityService ?? throw new System.ArgumentNullException(nameof(securityService));
+        if (securityService == null) { throw new System.ArgumentNullException(nameof(securityService)); }
+        this.securityService = securityService;
     }
 }
 ```
@@ -48,10 +48,10 @@ Statics are the same smell in another form ("skyhooks"): `ConfigurationManager`,
 
 ```csharp
 // ✗ untestable: the test can't control the time
-if (System.DateTime.Now.Hour >= 17) CloseTrading();
+if (System.DateTime.Now.Hour >= 17) { CloseTrading(); }
 
 // ✓ IClock is injected; a test passes a fixed clock
-if (clock.Now.Hour >= 17) CloseTrading();
+if (clock.Now.Hour >= 17) { CloseTrading(); }
 ```
 
 ## Package structure: Entourage vs Stairway
@@ -119,10 +119,10 @@ public class TouchProbe : ISensor, IMovable, IRotatable, IHeightAdjustable { ...
 
 ```csharp
 // ✗ every new sensor edits the switchboard
-if (CurrentSensor is Camera camera) camera.Zoom(level);
+if (CurrentSensor is Camera camera) { camera.Zoom(level); }
 
 // ✓ a new sensor that implements IHeightAdjustable works with no client change
-if (CurrentSensor is IHeightAdjustable adjustable) adjustable.Raise(height);
+if (CurrentSensor is IHeightAdjustable adjustable) { adjustable.Raise(height); }
 ```
 
    * One command per capability shrinks the switchboard and documents it. Next step: make each command an `ICommand`, so the switchboard is closed for modification.
@@ -130,11 +130,3 @@ if (CurrentSensor is IHeightAdjustable adjustable) adjustable.Raise(height);
 * **Turn disparate queries into one command.** `Capture()` returns `Image`, `Measure()` returns `float`, `GetPressure()` returns `PoundsPerSquareInch`: no common return type. The client actually wants to *output* the measurement, so invert it into `IMeasurable.WriteMeasurement(TextWriter)`.
    * Pick the most reusable sink: `TextWriter` (console, file, HTTP response), not `Console`.
 * **Sealed or third-party classes** join the abstraction through adapters that implement your capability interfaces.
-
-## Checklist
-
-* A business class `new`s a service or calls infrastructure statics → inject an interface.
-* An interface package references an implementation package or a third-party library → restructure into a Stairway; add an adapter.
-* An interface has exactly one non-test implementation and mirrors its class → model capabilities, or drop the interface.
-* Clients cast to concrete types → introduce capability interfaces.
-* An abstraction forces some implementers to throw → it's premature; split it.

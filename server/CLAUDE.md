@@ -2,6 +2,11 @@
 
 A C# server architecture template. It is **opt-out**: new projects copy it and delete the parts they don't need, instead of adding structure from memory. It's a skeleton: most folders hold only `.gitkeep`, `src/program.cs` is empty, and there's no project file or build, run or test command yet.
 
+# CLAUDE.md
+
+- The backend won't boot without git-ignored local config (`appsettings.Development.json`,
+  `launchSettings.json`, `*.LocalDev.json`). Get them from a teammate; don't recreate them.
+
 ## IMPORTANT: High-Quality Tokens / High-Quality Density
 
 Write only tokens that carry value for the reader or for future generations. A dense 5-page report beats the same content spread over 30 pages.
@@ -14,6 +19,10 @@ Write only tokens that carry value for the reader or for future generations. A d
 * Dense does not mean cryptic: a reader new to the topic must understand it from the text alone. Naming something is not showing it.
 * This applies to everything you write, especially files that later sessions load (`CLAUDE.md`, skills, memory).
 * Full rules: `.claude/skills/high-quality-tokens/SKILL.md`.
+
+# How We Work
+
+For any non-trivial feature, go through the Approach and Data questions before writing code, and state the answers briefly.
 
 ## Layout
 
@@ -61,6 +70,7 @@ For any non-trivial feature, go through the Approach and Data questions before w
 ## Approach
 
 * KISS.
+* SOLID.
 * What feature do we want?
 * What is the data?
    * What data views do we need to support?
@@ -84,7 +94,7 @@ For any non-trivial feature, go through the Approach and Data questions before w
 
 ## Code Style
 
-I don't follow idiomatic standards. No matter the language, I write in a C-like syntax and use explicit namespaces in my API calls. The reference example below shows what that means in practice:
+We don't follow idiomatic standards. No matter the language, We write in a C-like syntax and use explicit namespaces in my API calls. The reference example below shows what that means in practice:
 
 * **Explicit namespaces.** Import each library as a whole namespace, aliased to the library's name in lowercase (`import * as vue from 'vue'`, `import * as threejs from 'three'`). Every call and type goes through it: `vue.ref`, `vue.onMounted`, `threejs.Scene`, `threejs.WebGLRendererParameters`. No named imports like `import { ref } from 'vue'`. Language globals (`Math`, `window`, `ResizeObserver`) and framework macros (`defineProps`, `withDefaults`) stay bare.
    * In C#: don't bring library names into scope with `using X;`. Call through the namespace, and alias long ones (`using io = System.IO;`, then `io.File.ReadAllText(path)`).

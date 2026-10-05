@@ -35,14 +35,24 @@ if (cache.TryGet(request, out var cached)) return cached;
 return orders.Handle(request);
 
 // ✓ each check is a handler; the chain is assembled (or configured) outside
-abstract class Handler(Handler? next)
+abstract class Handler
 {
-    public virtual Response Handle(Request request) => next?.Handle(request) ?? Response.Unhandled;
+    private readonly Handler? next;
+    protected Handler(Handler? next) { this.next = next; }
+    public virtual Response Handle(Request request)
+    {
+        if (next == null) { return Response.Unhandled; }
+        return next.Handle(request);
+    }
 }
-class Authentication(Handler? next) : Handler(next)
+class Authentication : Handler
 {
-    public override Response Handle(Request request) =>
-        IsAuthenticated(request) ? base.Handle(request) : Response.Denied;
+    public Authentication(Handler? next) : base(next) { }
+    public override Response Handle(Request request)
+    {
+        if (!IsAuthenticated(request)) { return Response.Denied; }
+        return base.Handle(request);
+    }
 }
 var chain = new Authentication(new Validation(new Caching(new OrderHandler(next: null))));
 ```
@@ -66,11 +76,11 @@ var chain = new Authentication(new Validation(new Caching(new OrderHandler(next:
 
 ```csharp
 // ✗ each UI element calls the receiver directly: no queue, no undo, duplicated per shortcut
-class CopyButton : Button { protected override void OnClick() => editor.Copy(); }
+class CopyButton : Button { protected override void OnClick() { editor.Copy(); } }
 
 // ✓ the operation is an object: share it, queue it, log it, undo it
 interface ICommand { void Execute(); void Undo(); }
-class CopyCommand(Editor editor) : ICommand { ... }
+class CopyCommand : ICommand { public CopyCommand(Editor editor) { ... } ... }
 var copy = new CopyCommand(editor);
 copyButton.Command = copy;
 copyShortcut.Command = copy;
@@ -80,7 +90,7 @@ copyShortcut.Command = copy;
    * The command holds the arguments and the receiver, all set through the constructor.
    * Senders get commands from the client and talk to them only through the interface.
    * Initialization order: receivers → commands bound to receivers → senders bound to commands.
-* Cost: a whole layer between senders and receivers. If you need no queue, log or undo, a function reference does the job.
+* Cost: a whole layer between senders and receivers. If you need no queue, log or undo, a plain method call does the job.
 * Relations: Prototype stores copies of commands in history. Visitor is a more powerful Command that works across objects of different classes.
 
 ---
@@ -104,9 +114,11 @@ public IEnumerable<Node> DepthFirst()
 {
     yield return this;
     foreach (var child in Children)
-        foreach (var node in child.DepthFirst()) yield return node;
+    {
+        foreach (var node in child.DepthFirst()) { yield return node; }
+    }
 }
-foreach (var node in root.DepthFirst()) Visit(node);
+foreach (var node in root.DepthFirst()) { Visit(node); }
 ```
 
 * Implement the language's protocol (`IEnumerable`, generators), not a homemade iterator interface.
@@ -174,16 +186,25 @@ class Editor
 {
     private string text = "";
     private int cursorPosition;
-    public IMemento Save() => new Snapshot(text, cursorPosition, System.DateTime.UtcNow);
+    public IMemento Save() { return new Snapshot(text, cursorPosition, System.DateTime.UtcNow); }
     public void Restore(IMemento memento)
     {
         var snapshot = (Snapshot)memento;
         text = snapshot.Text;
         cursorPosition = snapshot.CursorPosition;
     }
-    private sealed record Snapshot(string Text, int CursorPosition, System.DateTime CreatedAt) : IMemento
+    private sealed class Snapshot : IMemento
     {
-        public string Name => $"{CreatedAt:HH:mm:ss}";
+        public readonly string Text;
+        public readonly int CursorPosition;
+        public System.DateTime CreatedAt { get; }
+        public string Name { get { return CreatedAt.ToString("HH:mm:ss"); } }
+        public Snapshot(string text, int cursorPosition, System.DateTime createdAt)
+        {
+            Text = text;
+            CursorPosition = cursorPosition;
+            CreatedAt = createdAt;
+        }
     }
 }
 ```
@@ -240,7 +261,7 @@ public void Publish()
     switch (state)
     {
         case "draft":      state = "moderation"; break;
-        case "moderation": if (currentUser.IsAdmin) state = "published"; break;
+        case "moderation": if (currentUser.IsAdmin) { state = "published"; } break;
         case "published":  break;
     }
 }
@@ -249,11 +270,15 @@ public void Publish()
 interface IDocumentState { void Publish(Document document); }
 class Draft : IDocumentState
 {
-    public void Publish(Document document) => document.State = new Moderation();
+    public void Publish(Document document) { document.State = new Moderation(); }
 }
 class Moderation : IDocumentState
 {
-    public void Publish(Document document) { if (document.CurrentUser.IsAdmin) document.State = new Published(); }
+    public void Publish(Document document)
+    {
+        if (!document.CurrentUser.IsAdmin) { return; }
+        document.State = new Published();
+    }
 }
 ```
 
@@ -277,27 +302,30 @@ A family of interchangeable algorithms, each in its own class.
 
 ```csharp
 // ✗ the context switches over the variants
-public Route BuildRoute(Point from, Point to) => mode switch
+public Route BuildRoute(Point from, Point to)
 {
-    TravelMode.Car     => BuildRoadRoute(from, to),
-    TravelMode.Walking => BuildWalkingRoute(from, to),
-    _                  => BuildTransitRoute(from, to),
-};
+    switch (mode)
+    {
+        case TravelMode.Car:     return BuildRoadRoute(from, to);
+        case TravelMode.Walking: return BuildWalkingRoute(from, to);
+        default:                 return BuildTransitRoute(from, to);
+    }
+}
 
 // ✓ variants are interchangeable objects; the client picks one
 interface IRouteStrategy { Route BuildRoute(Point from, Point to); }
-class Navigator(IRouteStrategy strategy)
+class Navigator
 {
-    public IRouteStrategy Strategy { get; set; } = strategy;
-    public Route BuildRoute(Point from, Point to) => Strategy.BuildRoute(from, to);
+    public IRouteStrategy Strategy { get; set; }
+    public Navigator(IRouteStrategy strategy) { Strategy = strategy; }
+    public Route BuildRoute(Point from, Point to) { return Strategy.BuildRoute(from, to); }
 }
 navigator.Strategy = new WalkingStrategy();
 ```
 
 * Cost
-   * Two rarely changing variants don't justify the classes.
+   * Two rarely changing variants don't justify the classes: keep the `switch` statement (see SKILL.md).
    * Clients must understand how the strategies differ to choose one.
-   * With first-class functions, a lambda often does the job (see SKILL.md).
 
 ---
 
@@ -357,26 +385,29 @@ Separate an algorithm from the objects it operates on.
 // ✓ double dispatch: Accept picks the visit method by the element's concrete type
 interface IShapeVisitor { void VisitCircle(Circle circle); void VisitRectangle(Rectangle rectangle); }
 interface IShape { void Accept(IShapeVisitor visitor); }
-class Circle    : IShape { public void Accept(IShapeVisitor visitor) => visitor.VisitCircle(this); }
-class Rectangle : IShape { public void Accept(IShapeVisitor visitor) => visitor.VisitRectangle(this); }
+class Circle    : IShape { public void Accept(IShapeVisitor visitor) { visitor.VisitCircle(this); } }
+class Rectangle : IShape { public void Accept(IShapeVisitor visitor) { visitor.VisitRectangle(this); } }
 class XmlExportVisitor : IShapeVisitor { ... }   // one behavior for every shape, in one class
 
-foreach (var shape in shapes) shape.Accept(xmlExport);
+foreach (var shape in shapes) { shape.Accept(xmlExport); }
 ```
 
 * Elements know visitors only through the visitor interface; visitors know every concrete element class.
 * Cost
    * Every visitor changes when an element class is added or removed: use it only for stable hierarchies.
    * Visitors can't reach private members, unless you make them public (breaking encapsulation) or nest the visitor.
-* Modern alternative: with exhaustive pattern matching over sealed types or sum types, a `switch` expression replaces the machinery:
+* Modern alternative: over sealed types or sum types, a `switch` statement on type replaces the machinery:
 
 ```csharp
-string ToXml(IShape shape) => shape switch
+string ToXml(IShape shape)
 {
-    Circle circle       => $"<circle r=\"{circle.Radius}\"/>",
-    Rectangle rectangle => $"<rect w=\"{rectangle.Width}\" h=\"{rectangle.Height}\"/>",
-    _                   => throw new System.ArgumentOutOfRangeException(nameof(shape)),
-};
+    switch (shape)
+    {
+        case Circle circle:       return $"<circle r=\"{circle.Radius}\"/>";
+        case Rectangle rectangle: return $"<rect w=\"{rectangle.Width}\" h=\"{rectangle.Height}\"/>";
+        default:                  throw new System.ArgumentOutOfRangeException(nameof(shape));
+    }
+}
 ```
 
 * Relations: runs over a whole Composite tree; combine with Iterator to traverse heterogeneous structures.

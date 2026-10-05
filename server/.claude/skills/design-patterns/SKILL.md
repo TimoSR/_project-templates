@@ -1,13 +1,13 @@
 ---
 name: design-patterns
-description: Choose, apply, review, and refactor toward the 22 classic GoF design patterns as taught in Alexander Shvets' "Dive Into Design Patterns". Use whenever the user asks which pattern fits a problem, wants to implement or refactor to a named pattern, asks how look-alike patterns differ (Strategy vs State vs Bridge, Decorator vs Proxy vs Adapter, Facade vs Mediator, Command vs Strategy), or shows code with pattern-shaped smells — a switch/if-chain on type or mode, telescoping constructors, subclass explosion across dimensions, an incompatible third-party API, undo/redo or queued operations, objects reacting to another's changes, a huge state machine, or near-duplicate algorithms in sibling classes — even if no pattern is named. Also when the user mentions factory, builder, singleton, prototype, adapter, bridge, composite, decorator, facade, flyweight, proxy, chain of responsibility, command, iterator, mediator, memento, observer, state, strategy, template method, or visitor.
+description: Chooses, applies, reviews and refactors toward 22 of the 23 GoF design patterns (all but Interpreter), from Alexander Shvets' "Dive Into Design Patterns". Use when the user asks which pattern fits, wants to implement or refactor to a named pattern, or asks how look-alikes differ (Strategy vs State vs Bridge, Decorator vs Proxy vs Adapter, Facade vs Mediator). Also on pattern-shaped smells, even if no pattern is named — a switch on type or mode, telescoping constructors, subclass explosion across dimensions, an incompatible third-party API, undo/redo or queued operations, objects reacting to another's changes, a huge state machine, near-duplicate algorithms in sibling classes. Also on any GoF pattern name (factory, builder, singleton, adapter, decorator, proxy, observer, strategy, visitor…). Not for general SOLID, DI or coupling reviews (solid-principles).
 ---
 
 # Design Patterns: Dive Into Design Patterns
 
 Source: Alexander Shvets, *Dive Into Design Patterns* (Refactoring.Guru, 2019). Sketches here are C#; the roles map to any language (see [Language mapping](#language-mapping)).
 
-A pattern is a **blueprint, not a recipe**: a named solution to a recurring design problem, adapted to your program. The name is vocabulary. It tells the next reader *which problem* you solved, which is why look-alike patterns are not interchangeable.
+A pattern's name tells the next reader *which problem* you solved. Look-alikes share one class diagram but name different problems, so pick by intent, never by structure.
 
 ## The principles every pattern serves
 
@@ -30,16 +30,23 @@ Shape                                          Shape ──has──► Color
 The usual price is more classes and interfaces. Before proposing a pattern:
 
 * **Name the concrete change or problem it solves in this code.** If you can't, don't apply it.
-* **Check its cost** in the reference file. Strategy or State with two rarely changing variants is overkill. Flyweight pays only when RAM is the bottleneck. Adapter loses to editing the service when you own it.
-* **Prefer the language feature when it *is* the pattern:**
+* **Check its cost** in the reference file. Flyweight pays only when RAM is the bottleneck. Adapter loses to editing the service when you own it.
+* **Prefer the language feature when it *is* the pattern:** `event` for Observer, `yield` for Iterator, `AddSingleton` for Singleton ([Language mapping](#language-mapping)).
+* **Strategy or State with a few rarely changing variants stays a `switch` statement.** House style bans delegate parameters (`Func<…>`), so a lambda is not the lightweight Strategy here:
 
 ```csharp
-// ✗ a class hierarchy for one method
+// ✗ a class hierarchy for one method with two variants that rarely change
 interface IDiscountStrategy { decimal Apply(decimal price); }
-class HalfPrice : IDiscountStrategy { public decimal Apply(decimal price) => price / 2; }
+class HalfPrice : IDiscountStrategy { public decimal Apply(decimal price) { return price / 2; } }
 
-// ✓ a function is a one-method Strategy
-System.Func<decimal, decimal> halfPrice = price => price / 2;
+// ✓ a switch statement; grow it into Strategy when variants multiply
+switch (discount)
+{
+    case Discount.Half:
+        return price / 2;
+    default:
+        return price;
+}
 ```
 
    * Use the class form only when you need what it adds: state, undo, several methods, named types.
@@ -50,13 +57,13 @@ System.Func<decimal, decimal> halfPrice = price => price / 2;
 
 1. **Describe the problem without pattern names.** What varies? What is coupled to what? What change is hard right now? Read the code first.
 2. **Shortlist candidates** with the symptom table.
-3. **Disambiguate by intent** with the look-alikes table. Several patterns share one class diagram, so structure alone doesn't decide.
+3. **Disambiguate by intent** with the look-alikes table.
 4. **Open the reference** for the shortlist: its use cases, its ✗/✓ sketch, its cost, its relations (a combination may fit better).
    * Creational: Factory Method, Abstract Factory, Builder, Prototype, Singleton → [creational.md](references/creational.md)
    * Structural: Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy → [structural.md](references/structural.md)
    * Behavioral: Chain of Responsibility, Command, Iterator, Mediator, Memento, Observer, State, Strategy, Template Method, Visitor → [behavioral.md](references/behavioral.md)
 5. **Implement as an incremental refactor:** introduce the interface, move one variant at a time, keep tests green after each move.
-6. **Verify.** The original hard change is now "add a class" (or a function) with no client edits. Delete any interface left with one implementation and no foreseeable second.
+6. **Verify.** The original hard change is now "add a class" (or a `switch` case) with no client edits. Delete any interface left with one implementation and no foreseeable second.
 
 ## Symptom → candidates
 
@@ -111,13 +118,6 @@ System.Func<decimal, decimal> halfPrice = price => price / 2;
 | Flyweight vs Singleton | Flyweight: many immutable instances, one per intrinsic state. Singleton: one instance, may be mutable. |
 | Prototype vs Memento | For simple state with no links to external resources, cloning can replace a memento. |
 
-## Useful combinations
-
-* **Command + Memento** for undo: the command acts; a memento saved just before restores.
-* **Composite +** Builder (build trees), Iterator (traverse), Visitor (operate on the whole tree), Flyweight (share leaves), Chain of Responsibility (bubble a request from leaf to root).
-* **Bridge + Abstract Factory** when certain abstractions work only with certain implementations.
-* **Abstract Factory, Builder, Prototype, Facade** are often single-instance: register them as DI singletons rather than implementing Singleton.
-
 ## Reporting a review or proposal
 
 One entry per finding:
@@ -127,27 +127,25 @@ PricingService.cs:88  PricingService.Calculate
 Problem       switch over customer type picks a discount rule; each new tier edits this method and its tests
 Pattern       Strategy, not State: the rule doesn't change the service's own state or trigger transitions
 Sketch        IDiscountRule per tier, chosen once from the customer; Calculate calls rule.Apply(price)
-Cost / now?   4 small classes, or a Func per tier; worth it now, since 2 more tiers are planned
+Cost / now?   4 small classes vs keeping the switch; worth it now, since 2 more tiers are planned
 ```
 
-* Close with patterns you deliberately did *not* recommend and why: usually "only two variants that rarely change" or "a lambda already does this".
+* Close with patterns you deliberately did *not* recommend and why: usually "only two variants that rarely change" or "a `switch` statement already does this".
 
 ## Language mapping
 
-*Interface* means a Java/C#/TS interface, a Python `Protocol`/ABC, a Rust trait or a Go interface.
-
 | Pattern | Idiomatic shortcut (use the full pattern only when you need more) |
 |---|---|
-| Strategy, single-method Command | Function, lambda, delegate (`Func<…>`/`Action<…>`), closure |
+| Strategy, single-method Command | A `switch` statement or a plain method call; no delegate parameters (house style) |
 | Iterator | `IEnumerable`/`yield`, Python generators, JS iterators, Rust `Iterator` |
 | Observer | Language or framework events (`event`, `IObservable<T>`, `EventEmitter`, signals) |
 | Singleton | DI single-instance lifetime (`AddSingleton`), module-level instance |
 | Prototype | Copy constructors, `with` on records/data classes, `copy.deepcopy`, `structuredClone` |
 | Builder | Named/default arguments or object initializers when there's no step logic or validation |
 | Proxy (virtual) | `Lazy<T>`, lazy properties |
-| Decorator | DI decoration (Scrutor `Decorate`), Python function decorators |
+| Decorator | DI decoration (Scrutor `Decorate`) |
 | Chain of Responsibility | Middleware pipelines (ASP.NET Core, Express), pipeline behaviors |
 | Mediator + Command | In-process request/handler dispatchers (MediatR) |
-| Visitor | Pattern matching / `switch` expressions over sealed hierarchies or sum types |
+| Visitor | A `switch` statement on type over sealed hierarchies or sum types |
 
-In a codebase with contract folders (e.g. `_contracts/`), pattern interfaces (strategy, handler, product, visitor, subscriber) go there; implementations stay in their module.
+In a codebase with contract folders (here `API/FF-API/_CONTRACTS/`), pattern interfaces (strategy, handler, product, visitor, subscriber) go there; implementations stay in their module.

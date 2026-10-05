@@ -1,11 +1,11 @@
 ---
 name: solid-principles
-description: Design, review, and refactor object-oriented code with the SOLID principles (SRP, OCP, LSP, ISP, DIP) plus dependency injection and coupling/cohesion/connascence, as taught in Gary McLean Hall's "Adaptive Code" (2nd ed.). Use whenever the user asks for a design or architecture review, wants to refactor a god class / long method / tangled service, is introducing interfaces or abstractions, designing a class hierarchy or an interface, wiring up DI or a composition root, deciding whether an abstraction is worth it, or fighting code that is hard to test or hard to change — and whenever they mention SOLID, single responsibility, open/closed, Liskov, interface segregation, dependency inversion, decorator/adapter/composite/strategy patterns, service locator, coupling, cohesion, or connascence, even if they never say "SOLID".
+description: Designs, reviews and refactors object-oriented code with the SOLID principles (SRP, OCP, LSP, ISP, DIP), dependency injection and coupling/cohesion/connascence, as taught in Gary McLean Hall's "Adaptive Code". Use when the user asks for a design or architecture review, refactors a god class, long method or tangled service, introduces interfaces or abstractions, designs a class hierarchy, wires up DI or a composition root, asks whether an abstraction is worth it, or fights code that is hard to test or change. Also when they mention SOLID, single responsibility, open/closed, Liskov, interface segregation, dependency inversion, service locator, coupling, cohesion or connascence, even if they never say "SOLID". Not for choosing or comparing named GoF patterns (design-patterns).
 ---
 
 # SOLID: Adaptive Code
 
-Source: Gary McLean Hall, *Adaptive Code*, 2nd ed. (Microsoft Press, 2017). The examples are C#; the ideas map to any language with interfaces (see [Language mapping](#language-mapping)).
+Source: Gary McLean Hall, *Adaptive Code*, 2nd ed. (Microsoft Press, 2017). The examples are C#; the ideas map to any language with interfaces.
 
 ## The one idea
 
@@ -53,7 +53,7 @@ class TouchProbe : IHeightAdjustable { ... }   // drives the probe height
 2. **List the reasons to change.** Each concrete future change is a responsibility: a new input source, format, validation rule, log destination or storage engine.
 3. **Refactor for clarity.** Extract one method per responsibility so the top method reads as the process (`Read → Parse → Store`). Readable, not yet adaptive.
 4. **Refactor for abstraction.** Move each responsibility behind an interface and inject it through the constructor. Pass context (stream, connection string, path) into the *implementation's* constructor, never into interface methods. Repeat until each class has one reason to change.
-5. **Apply patterns where they fit:** Decorator for cross-cutting behavior, Adapter for third-party types, Composite for one-to-many, Strategy for interchangeable algorithms. See [srp-and-decorators.md](references/srp-and-decorators.md).
+5. **Apply patterns where they fit:** Decorator for cross-cutting behavior, Adapter for third-party types, Composite for one-to-many, Strategy for interchangeable algorithms. See [srp-and-decorators.md](references/srp-and-decorators.md); choosing between look-alike patterns is the `design-patterns` skill.
 6. **Wire everything at the composition root**, at the entry point only. See [dependency-injection.md](references/dependency-injection.md).
 7. **Verify.**
    * Tests are still green.
@@ -117,10 +117,8 @@ Worth it now?      yes: the queue migration is planned
 * **Worth it now?** weighs predicted variation and distance (same class vs separate services).
 * Close with what you deliberately did *not* flag because abstracting it would be speculative.
 
-## Language mapping
+## In this repo
 
-* **Interface:** Java/Kotlin/TS interface, Python `Protocol`/ABC, Rust trait, Go interface.
-* **`sealed`:** `final`.
-* **Generic `in`/`out` variance:** Kotlin `in`/`out`, Java `? super`/`? extends`.
-* **Composition root:** wherever the program starts: `Program.cs`/`main`, an app factory, framework startup.
-* In a codebase with contract folders (e.g. `_contracts/`), those are the interface side of the Stairway. Interfaces go there; implementations stay in their feature or module.
+* **No exceptions in the domain** (`.claude/CLAUDE.md`). An LSP precondition becomes DTO-boundary validation or a factory that returns null: `Weight.Create(kilograms) → Weight?`, not a throwing constructor. The guard-clause, exception-hierarchy and `NotSupportedException` advice in [lsp-contracts-and-variance.md](references/lsp-contracts-and-variance.md) applies to infrastructure and adapters only.
+* **Composition root:** `FF.Api/Startup.cs`. Elsewhere, wherever the program starts: `Program.cs`/`main`, an app factory, framework startup.
+* **Contract folders** (here `API/FF-API/_CONTRACTS/`) are the interface side of the Stairway. Interfaces go there; implementations stay in their feature or module.

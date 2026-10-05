@@ -7,7 +7,8 @@ description: >-
   failing xUnit test before any fix. Use when the user pastes an exception message,
   stack trace, Application Insights payload or error report, or says "debug this
   exception", "why does this throw", "find where this error comes from", or
-  "reproduce this bug".
+  "reproduce this bug". Not for a failing or flaky test in the existing suite
+  (tests-as-documentation).
 argument-hint: "<exception message and/or stack trace>"
 ---
 
@@ -57,7 +58,7 @@ grep -rn "has no active repayment plan" API/ --include=*.cs
 
 ## 4. Endpoint that triggers it
 
-All endpoints are GraphQL (Hot Chocolate). Two kinds of mutation:
+Most endpoints are GraphQL (Hot Chocolate) mutations, of two kinds:
 
 | Kind | Where the code is | How to find it |
 |---|---|---|
@@ -74,12 +75,12 @@ All endpoints are GraphQL (Hot Chocolate). Two kinds of mutation:
               └─ GraphQL field: anonymizeAndDeletePerson(input: AnonymizeAndDeletePersonInput)
       ```
    * Naming rule: `<Name>Command` → `<Name>Mutation.g.cs` → field `<name>` (camelCase).
-   * Generated files only exist after a build: `dotnet build FF-Api.sln`.
+   * Generated files only exist after a build: `dotnet build FF-Api.sln` (from `API/FF-API/`).
 * The generated wrapper adds behavior that can explain the bug:
    * `ConcurrentUpdateRetryPolicy` → the command can run **more than once** per request.
-   * `DbUpdateException` (non-concurrency) is parsed into an output error, not rethrown.
+   * `DbUpdateException` (non-concurrency) that `ParseDbUpdateException()` recognizes becomes an output error; an unrecognized one is rethrown.
    * Output `IsSuccess == false` → `uow.Rollback()`; nothing is persisted.
-* Not a mutation? Check queries (`FF.Api/FFApiQuery.cs`), handlers/processors (`LoanRepaymentProcessor`, `*Handler` for domain events), scheduled jobs. Stack trace frames name the entry point.
+* Not a mutation? Check queries (`FF.Api/FFApiQuery.cs`), REST controllers (external API and webhooks such as AIIA, Stripe, KYC in `FF.Api/Controllers/**`; feature modules in `FF.Api/Features/<Name>Feature/API/REST/`), handlers/processors (`LoanRepaymentProcessor`, `*Handler` for domain events), scheduled jobs. Stack trace frames name the entry point.
 
 ## 5. Database: which tables, which rows
 
@@ -91,7 +92,7 @@ All endpoints are GraphQL (Hot Chocolate). Two kinds of mutation:
    ```
    * **Read-only `SELECT` only.** Never `UPDATE`/`DELETE`/`INSERT`, even to "fix the data".
    * Ask the user which database (local / test / staging / prod) and for the connection; don't guess one.
-   * Don't paste personal data (names, CPR, emails, account numbers) into the reply; report the shape (`Status = Approved, RepaymentPlanId = NULL`).
+   * Don't paste personal data (names, CPR, emails, account numbers) into the reply; report the shape (`Status = Funded, RepaymentPlanId = NULL`).
 * Goal of the query: the exact state that breaks the invariant. That state is the test's Arrange.
 
 ## 6. Reproduce with an xUnit test
@@ -107,19 +108,19 @@ The test documents the bug and proves the fix. Write it with the `tests-as-docum
       output.Errors.Should().ContainSingle().Which.Message.Should().Be("Loan has no active repayment plan")
       // fix = the operation succeeds
       output.IsSuccess.Should().BeTrue()
-      loan.Status.Should().Be(LoanStatus.Approved)
+      loan.Status.Should().Be(LoanStatus.Funded)
       ```
 * Red → green happens locally. Commit the test together with the fix, so CI never sees the red test.
 * Pick the database by what the bug needs:
 
 | Bug needs | Use |
 |---|---|
-| Plain EF behavior | SQLite in-memory (default in `FF.Tests`) |
-| SQL Server behavior: concurrency tokens, raw SQL, collation, transactions, constraints SQLite lacks | Testcontainers: `[Collection(nameof(MsSqlCollection))]` + `MsSqlContainerFixture` (`FF.Tests/Util/MsSqlContainerFixture.cs`, example `FF.Tests/AutoInvest/AutoInvestProcessorTests.cs`) |
+| Any database behavior (the legacy SQLite `InMemDbFixture` hides SQL Server's constraints, collation and concurrency) | Testcontainers: `[Collection(nameof(MsSqlCollection))]` + `MsSqlContainerFixture` (`FF.Tests/Util/MsSqlContainerFixture.cs`, example `FF.Tests/AutoInvest/AutoInvestProcessorTests.cs`) |
 | Other external dependency (Redis, …) | A Testcontainers module for it, same fixture pattern |
 
 * Run it and confirm it fails **for the same reason** as production (same message/type):
    ```bash
+   # from API/FF-API/
    dotnet test FF.Tests/FF.Tests.csproj --filter "FullyQualifiedName~<TestClass>"
    ```
    * Fails for a different reason → the Arrange doesn't match production state; go back to step 5.

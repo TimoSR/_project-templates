@@ -23,8 +23,8 @@ Sources: https://code.claude.com/docs/en/skills and https://platform.claude.com/
 
 | Field | Purpose |
 |---|---|
-| `name` | The `/` command name; defaults to the directory name. Lowercase letters, digits, hyphens; max 64 chars; no `anthropic` or `claude`. |
-| `description` | What the skill does and when to use it: the main trigger signal. Max 1,024 chars (API spec). Claude Code caps it at 1,536 together with `when_to_use`. |
+| `name` | The `/` command name; defaults to the directory name. Lowercase letters, digits, hyphens; max 64 chars; no `anthropic` or `claude` (Agent Skills spec; Claude Code loads such names anyway). |
+| `description` | What the skill does and when to use it: the main trigger signal. Max 1,024 chars (API spec). Claude Code truncates it at 1,536 in the skill listing, together with `when_to_use`. |
 | `when_to_use` | Extra trigger context, appended to `description`. |
 | `argument-hint` | Autocomplete hint, e.g. `[issue-number]`. |
 | `arguments` | Named positional args, e.g. `[issue, branch]` → `$issue`, `$branch`. |
@@ -100,7 +100,7 @@ my-skill/
 * Organize by domain (`reference/finance.md`, `reference/sales.md`) so Claude reads only what the task needs.
 * Descriptive filenames: `form_validation_rules.md`, not `doc2.md`.
 * State each script's intent: "Run `scripts/x.py` to …" (execute) vs "See `scripts/x.py` for the algorithm" (read).
-* Lifecycle: once invoked, a skill stays in context for the session. After compaction, only the first ~5,000 tokens of each recent skill are re-attached.
+* Lifecycle: once invoked, a skill stays in context for the session and is not re-read. After compaction, the most recent invocation of each skill is re-attached, first 5,000 tokens each, from a 25,000-token budget filled newest first, so older skills can drop. Invoke the skill again to restore it.
 
 ## 6. Description tuning
 
@@ -230,9 +230,10 @@ Return a summary of at most 30 lines with file:line references.
 |---|---|
 | Claude never uses the skill | Check `/skills`. Reword `description` with concrete triggers. Test with `/name`. |
 | Triggers too often | Make `description` more specific, or add `disable-model-invocation: true`. |
-| Stops following a rule mid-session | Move the rule to the top of SKILL.md, or make it a hook. |
-| Description truncated in listing | Too many skills compete for the listing budget. Run `/skill-doctor` and disable unused skills. |
-| YAML errors | `claude --debug`, or `claude plugin validate .claude/skills` (v2.1.233+). |
+| Stops following a rule mid-session | No-exception rule: make it a hook (`hooks` frontmatter). Judgment call: word it for the whole task. After compaction: invoke the skill again, and keep key rules in the first 5,000 tokens. |
+| Description truncated in listing | `description` + `when_to_use` is over 1,536 chars. Condense it, most specific keywords first. |
+| Too many skills cost context every turn | `/skill-doctor` shows each skill's context cost and use count; turn off the unused ones. |
+| YAML errors | `claude --debug`, or `claude plugin validate .claude/skills`. |
 | `` !`cmd` `` aborts the skill | The command exited non-zero. Add `|| true` or fix the command. |
 
 ## Checklist

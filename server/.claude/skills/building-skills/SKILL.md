@@ -1,6 +1,6 @@
 ---
 name: building-skills
-description: Designs, writes, and tests Claude Code skills (SKILL.md plus supporting files) following Anthropic's skill-authoring best practices. Use when the user wants to create a new skill, turn a repeated workflow or a body of domain knowledge into a skill, improve or shrink an existing skill, fix a skill that triggers too often or never triggers, or asks how skills, SKILL.md frontmatter, or slash-command skills work.
+description: Designs, writes, and tests Claude Code skills (SKILL.md plus supporting files) following Anthropic's skill-authoring best practices. Use when the user wants to create a new skill, turn a repeated workflow or a body of domain knowledge into a skill, improve or shrink an existing skill, fix a skill that triggers too often or never triggers, or asks how skills, SKILL.md frontmatter, or slash-command skills work. Not for rendering a skill as a page (generate-skill-artifact) or benchmarked evals (skill-creator).
 argument-hint: "[what the skill should do]"
 ---
 
@@ -47,7 +47,7 @@ If Claude already handles the task well without help, don't write a skill.
 
 ## 4. Write it
 
-* **`name`:** lowercase letters, digits and hyphens; at most 64 characters; no `anthropic` or `claude`. Prefer a gerund (`processing-pdfs`) or a noun phrase, matching sibling skills.
+* **`name`:** lowercase letters, digits and hyphens; at most 64 characters; no `anthropic` or `claude` if it may be uploaded to claude.ai or the API (Claude Code loads such names). Prefer a gerund (`processing-pdfs`) or a noun phrase, matching sibling skills.
 * **`description`:** triggering depends on it.
    * Third person. What it does, then "Use when …" with concrete triggers: user phrasings, file types, tool names, symptoms.
    * At most 1,024 characters. Slightly assertive triggers better than timid.
@@ -71,7 +71,8 @@ description: Extract text and tables from PDF files, fill forms, merge documents
    * Scripts handle their own errors and have no unexplained constants.
    * Reference them as `${CLAUDE_SKILL_DIR}/scripts/x.py`.
 * **Workflows:** numbered steps. Long ones get a copyable checklist and a validate → fix → repeat loop before any irreversible step.
-* **Rules that must hold all session go at the top:** after compaction only the first ~5,000 tokens of a skill are re-attached. Consider making them a hook.
+* **Standing instructions:** Claude doesn't re-read SKILL.md on later turns, so word guidance for the whole task ("Run the tests after every edit", not "Run the tests").
+* **Rules that must hold all session go at the top:** after compaction only the first ~5,000 tokens of a skill are re-attached, from a 25,000-token budget shared by all skills (older ones can drop). Rules with no exceptions belong in a hook (the skill's `hooks` frontmatter keeps it with the skill).
 
 ## 5. Verify (required)
 
@@ -79,12 +80,12 @@ description: Extract text and tables from PDF files, fill forms, merge documents
    ```bash
    python "${CLAUDE_SKILL_DIR}/scripts/validate_skill.py" .claude/skills/<name>
    ```
-   On CLI v2.1.233+, also run `claude plugin validate .claude/skills`.
+   Also run `claude plugin validate .claude/skills` (YAML parse errors). No Python (on Windows, `python` may be only the Store stub)? That command alone still catches YAML errors, but not the size, link or description checks.
 2. **Trigger test** in a fresh context: one subagent per test prompt, with no hint about the skill. Report which prompts loaded it. Adjust the `description` until both should-trigger prompts fire and the near-miss doesn't.
 3. **Behavior test:** a fresh subagent runs one real task with the skill. Compare the result against the gap from step 2 and fix what it missed. Don't add rules for problems that never showed up.
 4. **Show the evidence:** linter output, trigger results, behavior result. Never just "done".
 
-For measured evals (with-skill vs baseline, trigger accuracy, benchmarks), hand off to the `skill-creator` plugin.
+For measured evals (with-skill vs baseline, trigger accuracy, benchmarks), hand off to the `anthropic-skills:skill-creator` skill.
 
 ## 6. Review before finishing
 

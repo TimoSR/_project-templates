@@ -36,7 +36,7 @@ Book chapters 9–13.
 
 * **Consumer-driven:** the consumer team writes the contracts, and they run in the provider's pipeline. A failure tells the provider team it broke a client, before it deploys. Tools: Pact (many languages, including .NET), Spring Cloud Contract (JVM).
 * Contract tests check the API's shape (path, headers, status, body), not the provider's business logic. Unit tests cover the logic.
-* **Integration tests test adapters, not whole services:** the repository against real Postgres (in a container), the event publisher, a proxy against a contract.
+* **Integration tests test adapters, not whole services:** the repository against a real database in a container (SQL Server via Testcontainers here: `tests-as-documentation`), the event publisher, a proxy against a contract.
 * **Component tests:** acceptance tests for one service, written as Given/When/Then scenarios from the user stories.
 
 ```gherkin
@@ -49,7 +49,7 @@ And an OrderAuthorized event should be published
 
 * Two ways to run component tests:
    * In-process: in-memory infrastructure and stubs. Fast, but doesn't test the deployable artifact.
-   * Out-of-process: the real container image, real Postgres and broker, stubbed services. More realistic, slower, more brittle.
+   * Out-of-process: the real container image, real database and broker, stubbed services. More realistic, slower, more brittle.
 * **End-to-end:** test user journeys. One test that places, revises and cancels an order replaces three tests and shares their setup.
 * **Saga unit test:** given the current state and a reply, assert the next command. In this repo's pure form (data-consistency-and-queries.md §4), that's a plain function call.
 * **Deployment pipeline**, fast feedback first: pre-commit (unit) → commit (compile, unit, static analysis) → integration → component → deploy.
@@ -73,7 +73,7 @@ And an OrderAuthorized event should be published
 * Two models:
    * **Push:** the platform supplies environment variables or a config file when it starts the instance.
    * **Pull:** the service reads a config server. You get centralization, decrypted secrets and reloads, but one more component to run.
-* In this repo: defaults in `src/_config`, overridden per environment (`config_guidelines.md`). ASP.NET Core layers them for you: `appsettings.json` → `appsettings.{Environment}.json` → environment variables.
+* In this repo: defaults in `FF.Api/appsettings.json`, bound to `ConfigSettings`; local overrides in the git-ignored `appsettings.Development.json` and `*.LocalDev.json` (from a teammate); secrets from Key Vault (`FF.App/Services/KeyValueStorage/`). ASP.NET Core layers them: `appsettings.json` → `appsettings.{Environment}.json` → environment variables.
 
 ## 4. Observability
 
@@ -81,16 +81,16 @@ Developers make each service observable. Operations runs the servers that collec
 
 | Pattern | What the service does | .NET |
 |---|---|---|
-| Health check API | `GET /health` reports DB and broker connectivity. The platform sends traffic only to healthy instances and restarts unhealthy ones. | ASP.NET Core health checks |
-| Log aggregation | Structured logs with the request id; a central server searches and alerts | Serilog or `ILogger` to a central store |
-| Distributed tracing | Propagates a trace id through HTTP and message headers; records a span per call, so you see where the time went | OpenTelemetry |
+| Health check API | `GET /health` reports DB and broker connectivity. The platform sends traffic only to healthy instances and restarts unhealthy ones. | ASP.NET Core health checks (here: `/health`, `/health/details`) |
+| Log aggregation | Structured logs with the request id; a central server searches and alerts | Serilog → Application Insights (here) |
+| Distributed tracing | Propagates a trace id through HTTP and message headers; records a span per call, so you see where the time went | Application Insights request/dependency correlation (here); OpenTelemetry |
 | Application metrics | Counters and gauges, technical (latency) and business (orders placed, approved, rejected) | OpenTelemetry metrics, Prometheus |
-| Exception tracking | Reports exceptions to a service that deduplicates them, alerts, and tracks the fix | Sentry, Honeybadger |
+| Exception tracking | Reports exceptions to a service that deduplicates them, alerts, and tracks the fix | Application Insights (here); Sentry |
 | Audit logging | Records user + action + business object in a table | Code in the use case, a decorator, or event sourcing (which misses queries) |
 
 ## 5. Microservice chassis and service mesh
 
-* **Chassis:** a framework that handles cross-cutting concerns (config, health, metrics, discovery, circuit breakers, tracing), so a new service starts with business logic. Here that's ASP.NET Core plus the shared code in `src/_architecture` and `src/_libs`.
+* **Chassis:** a framework that handles cross-cutting concerns (config, health, metrics, discovery, circuit breakers, tracing), so a new service starts with business logic. Here that's ASP.NET Core plus the shared framework in `API/FTB/Ftb/` (base classes, auth, caching, logging) and its source generators.
 * **Service mesh** (Istio, Linkerd): moves the network concerns out of the process: circuit breaking, tracing, discovery, load balancing, mTLS, traffic routing. It works for every language.
    * It also separates deploying from releasing: deploy v2, send it test traffic, then shift production traffic to it gradually.
 

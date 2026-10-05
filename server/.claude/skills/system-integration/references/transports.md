@@ -32,7 +32,7 @@ query { invoice(id: "inv_9") { status amountCents customer { name } } }
 
    * Costs: a schema and resolvers to maintain, N+1 database queries behind nested resolvers (batch them with DataLoader), and a public endpoint needs depth and complexity limits against expensive queries.
    * Integrating with a vendor's GraphQL API ties our code to their schema: keep the queries inside the vendor adapter.
-* HATEOAS / HAL: responses carry links (`"_links": { "next": { "href": "/v1/invoices?page=3" } }`) so clients follow transitions instead of building URLs. Default: only `next`/`prev` links for pagination. Full hypermedia rarely pays off.
+* HATEOAS / HAL: responses carry links (`"_links": { "next": { "href": "/v1/invoices?page=3" } }`) so clients follow transitions instead of building URLs. Default: only `next`/`prev` links for pagination. Full hypermedia rarely pays off. Designing our own REST resources, status codes and versions: `api-design`.
 
 ## 2. The update problem
 
@@ -61,10 +61,15 @@ A client's copy goes stale the moment it's fetched. REST has no subscription, so
 
 **Long polling**
 
-```
-client: GET /v1/messages?after=41   ──▶ server holds the request for up to 30 s
-server: 200 [42, 43]                ◀── as soon as data exists (204 at timeout)
-client: GET /v1/messages?after=43   ──▶ immediately
+```mermaid
+sequenceDiagram
+    participant client
+    participant server
+    loop next request goes out immediately: after=41 → 200 [42, 43] → after=43
+        client->>server: GET /v1/messages?after={last id}
+        Note over server: holds the request for up to 30 s
+        server-->>client: 200 [new messages] as soon as data exists, 204 at timeout
+    end
 ```
 
 * Each waiting client holds a connection: write the handler async.
@@ -115,11 +120,17 @@ Sec-WebSocket-Key: dGhlIHNhbXBsZQ==
 
 **WebRTC**
 
-```
-peer A ──offer (SDP)──────────▶ signaling server (your WebSocket) ──▶ peer B
-peer A ◀──answer + ICE candidates──────────────────────────────────── peer B
-peer A ◀═══════ media and data, directly over UDP (SRTP) ═══════════▶ peer B
-                or relayed through a TURN server when NAT blocks it
+```mermaid
+sequenceDiagram
+    participant peerA as peer A
+    participant signalingServer as signaling server (your WebSocket)
+    participant peerB as peer B
+    peerA->>signalingServer: offer (SDP)
+    signalingServer->>peerB: offer (SDP)
+    peerB->>signalingServer: answer + ICE candidates
+    signalingServer->>peerA: answer + ICE candidates
+    peerA<<->>peerB: media and data, directly over UDP (SRTP)
+    Note over peerA,peerB: or relayed through a TURN server when NAT blocks it
 ```
 
 * You still run servers: signaling (any channel), STUN (tells a peer its public address), TURN (relays when a direct path fails; costs bandwidth).
@@ -145,16 +156,8 @@ peer A ◀═══════ media and data, directly over UDP (SRTP) ══�
 * TCP is the default. Choose UDP when a late packet is worthless: the player's position from 200 ms ago, a voice frame. Then rebuild only the reliability you need: sequence numbers to drop stale packets, and acks for the few messages that must arrive ("player died").
 * Video sites stream over HTTP (HLS, DASH), on TCP or QUIC: buffering hides latency, and HTTP passes every firewall and CDN. See [data-formats.md](data-formats.md) §8.
 * TCP has no message boundaries. A custom protocol must frame its messages: a length prefix (`[4-byte length][payload]`) or a delimiter (`\n`).
-* Socket lifecycle:
-   * Server: `socket → bind → listen → accept → receive/send → close`.
-   * Client: `socket → connect → send/receive → close`.
-   * Handle partial reads, timeouts and half-closed connections.
-* Writing a multiplayer or blockchain protocol means designing a protocol: message types, framing, serialization, versioning, ordering, retries. Ethereum nodes speak their own protocol over TCP (port 30303).
-* Text vs binary protocols:
-   * Text: HTTP/1.1, SMTP, FTP, POP3 send readable commands. Easy to debug with `curl` or `telnet`.
-   * Binary: HTTP/2, HTTP/3, DNS, SSH, WebSocket frames, TCP itself. Smaller and faster to parse.
-* Every message is a header (addresses, type, length, metadata) plus a payload. Large payloads are split into packets that fit the network's MTU (~1,500 bytes on Ethernet).
-* Delivery: unicast (one receiver), multicast (a group), broadcast (everyone on the network).
+* Raw socket code (`bind → listen → accept` or `connect`, then send/receive) must handle partial reads, timeouts and half-closed connections.
+* A custom protocol (multiplayer, blockchain node) is a design job: message types, framing, serialization, versioning, ordering, retries. Text protocols (HTTP/1.1, SMTP) debug with `curl` or `telnet`; binary ones (HTTP/2, DNS, WebSocket frames) are smaller and faster to parse.
 
 ## 6. CORS
 
@@ -180,8 +183,8 @@ OPTIONS /v1/invoices/inv_9          Origin: https://app.example.com
 | Technique | Example | Protects against |
 |---|---|---|
 | Version in the URL | `/v1/invoices`, `/v2/invoices` | breaking clients when a field is removed or renamed; additive changes stay in v1 |
-| Base URL and timeouts in config | `Integration:Hubspot:BaseUrl` in `src/_config/` | redeploying code to change an endpoint |
-| One adapter per external API | `integration/Hubspot/` is the only code that knows Hubspot | vendor changes spreading through the app |
+| Base URL and timeouts in config | a vendor section in `appsettings.json`, bound to a config class (`TwilioConfig`, `AiiaConfig`) | redeploying code to change an endpoint |
+| One adapter per external API | `FF.App/Twilio/` is the only code that calls Twilio; callers use its service interface | vendor changes spreading through the app |
 | Tolerant reader | ignore unknown fields (`System.Text.Json` does by default); map unknown enum values to `unknown` | breaking when the provider adds fields |
 | API gateway | auth, rate limits and routing in front of many backends | duplicated cross-cutting code (`microservices-patterns`) |
 

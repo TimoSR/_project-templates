@@ -27,9 +27,11 @@ analytics.Track(ConvertXmlToJson(stockData));
 
 // ✓ one adapter speaks the interface the app wants; it converts and nothing more
 interface IStockAnalytics { void Track(System.Xml.XmlDocument stockData); }
-class JsonAnalyticsAdapter(AnalyticsLibrary library) : IStockAnalytics
+class JsonAnalyticsAdapter : IStockAnalytics
 {
-    public void Track(System.Xml.XmlDocument stockData) => library.Track(ConvertXmlToJson(stockData));
+    private readonly AnalyticsLibrary library;
+    public JsonAnalyticsAdapter(AnalyticsLibrary library) { this.library = library; }
+    public void Track(System.Xml.XmlDocument stockData) { library.Track(ConvertXmlToJson(stockData)); }
 }
 ```
 
@@ -61,13 +63,20 @@ Remote ──device──► IDevice
 ```
 
 ```csharp
-class Remote(IDevice device)
+class Remote
 {
-    public void TogglePower() { if (device.IsEnabled) device.Disable(); else device.Enable(); }
+    protected readonly IDevice device;
+    public Remote(IDevice device) { this.device = device; }
+    public void TogglePower()
+    {
+        if (device.IsEnabled) { device.Disable(); return; }
+        device.Enable();
+    }
 }
-class AdvancedRemote(IDevice device) : Remote(device)
+class AdvancedRemote : Remote
 {
-    public void Mute() => device.SetVolume(0);
+    public AdvancedRemote(IDevice device) : base(device) { }
+    public void Mute() { device.SetVolume(0); }
 }
 var remote = new AdvancedRemote(new Radio());
 ```
@@ -93,14 +102,30 @@ var remote = new AdvancedRemote(new Radio());
 ```csharp
 // ✗ the client walks the tree and type-checks every node
 decimal total = 0;
-foreach (var item in box.Items) total += item is Box inner ? SumBox(inner) : ((Product)item).Price;
+foreach (var item in box.Items)
+{
+    if (item is Box inner) { total += SumBox(inner); continue; }
+    total += ((Product)item).Price;
+}
 
 // ✓ one interface; containers recurse
 interface IOrderItem { decimal Price(); }
-class Product(decimal price) : IOrderItem { public decimal Price() => price; }
-class Box(List<IOrderItem> children) : IOrderItem
+class Product : IOrderItem
 {
-    public decimal Price() => children.Sum(child => child.Price());
+    private readonly decimal price;
+    public Product(decimal price) { this.price = price; }
+    public decimal Price() { return price; }
+}
+class Box : IOrderItem
+{
+    private readonly List<IOrderItem> children;
+    public Box(List<IOrderItem> children) { this.children = children; }
+    public decimal Price()
+    {
+        decimal total = 0;
+        foreach (var child in children) { total += child.Price(); }
+        return total;
+    }
 }
 ```
 
@@ -123,10 +148,12 @@ class Box(List<IOrderItem> children) : IOrderItem
 class EncryptedCompressedFileDataSource : FileDataSource { ... }
 
 // ✓ wrappers stack in any order, chosen at run time
-class Compression(IDataSource inner) : IDataSource
+class Compression : IDataSource
 {
-    public void Write(byte[] data) => inner.Write(Compress(data));
-    public byte[] Read() => Decompress(inner.Read());
+    private readonly IDataSource inner;
+    public Compression(IDataSource inner) { this.inner = inner; }
+    public void Write(byte[] data) { inner.Write(Compress(data)); }
+    public byte[] Read() { return Decompress(inner.Read()); }
 }
 IDataSource source = new Encryption(new Compression(new FileDataSource("data.bin")));
 ```
@@ -177,11 +204,14 @@ var mp4 = new VideoConverter().Convert(fileName, VideoFormat.Mp4);
 class Particle { public double X, Y, Speed; public Color Color; public Sprite Sprite; }
 
 // ✓ intrinsic state (shared, immutable) vs extrinsic state (per particle, passed in)
-sealed class ParticleType(Color color, Sprite sprite)
+sealed class ParticleType
 {
+    private readonly Color color;
+    private readonly Sprite sprite;
+    public ParticleType(Color color, Sprite sprite) { this.color = color; this.sprite = sprite; }
     public void Draw(Canvas canvas, double x, double y) { ... }
 }
-record struct Particle(double X, double Y, double Speed, ParticleType Type);   // Type comes from a factory cache
+struct Particle { public double X, Y, Speed; public ParticleType Type; }   // Type comes from a factory cache
 ```
 
 * Steps that matter
@@ -211,11 +241,18 @@ A substitute that controls access to another object, doing work before or after 
 var video = youTube.GetVideo(id);
 
 // ✓ caching proxy: same interface, clients unchanged
-class CachedYouTube(IYouTube service) : IYouTube
+class CachedYouTube : IYouTube
 {
-    private readonly Dictionary<string, Video> cache = new();
-    public Video GetVideo(string id) =>
-        cache.TryGetValue(id, out var video) ? video : cache[id] = service.GetVideo(id);
+    private readonly IYouTube service;
+    private readonly Dictionary<string, Video> cache = new Dictionary<string, Video>();
+    public CachedYouTube(IYouTube service) { this.service = service; }
+    public Video GetVideo(string id)
+    {
+        if (cache.TryGetValue(id, out var cached)) { return cached; }
+        var video = service.GetVideo(id);
+        cache[id] = video;
+        return video;
+    }
 }
 ```
 

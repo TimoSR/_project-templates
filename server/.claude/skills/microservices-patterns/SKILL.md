@@ -1,6 +1,6 @@
 ---
 name: microservices-patterns
-description: Designs, reviews, and refactors service-based systems with the microservice pattern language from Chris Richardson's "Microservices Patterns" (Manning, 2018) - monolith vs microservices, decomposition by business capability or subdomain, sync vs async communication, circuit breakers, transactional outbox, idempotent consumers, sagas, DDD aggregates and domain events, event sourcing, API composition vs CQRS, API gateway and backends for frontends, contract and component tests, observability, and strangling a monolith. Use when the user splits a monolith or feature into services or modules, designs how services talk, needs consistency across databases without distributed transactions, publishes events reliably, handles duplicate or out-of-order messages, queries data owned by several services, designs an external API or gateway, or tests service interactions, or mentions microservices, saga, outbox, CQRS, event sourcing, aggregate, bounded context, API gateway, eventual consistency, 2PC, or strangler fig.
+description: Chooses and reviews service boundaries with the pattern language from Chris Richardson's "Microservices Patterns" - decomposition, sagas, transactional outbox, idempotent consumers, domain events, event sourcing, API composition vs CQRS, API gateway, strangler fig. Use when deciding whether or how to split a system into services or modules, keeping data consistent across services without 2PC, publishing events reliably, handling duplicate messages, or querying data owned by several services, or when the user mentions microservices, saga, outbox, CQRS, bounded context or eventual consistency. Not for the concrete extraction of a FlexFunding feature module (soft-extract-feature) or for picking a transport, broker or vendor (system-integration).
 ---
 
 # Microservices Patterns
@@ -8,6 +8,11 @@ description: Designs, reviews, and refactors service-based systems with the micr
 Source: Chris Richardson, *Microservices Patterns* (Manning, 2018). The book's code is Java/Spring. This skill keeps its running example, **FTGO** (food delivery: Order, Consumer, Kitchen, Accounting and Delivery services), and maps it to C# and this repo at the end.
 
 Each pattern comes with three things: the forces it resolves, its drawbacks, and the new problems it creates (the successor patterns). Recommend a pattern only with all three.
+
+Boundaries:
+* This skill picks the architecture and the pattern: module or service, saga or not, outbox, composition or CQRS view.
+* `soft-extract-feature`: the in-repo procedure that moves monolith code into `FF.Api/Features/{Name}Feature/`.
+* `system-integration`: the wire under a pattern: transport, broker choice, webhooks, vendor adapters, formats.
 
 ## The one idea
 
@@ -27,7 +32,7 @@ Database per service
 
 * New applications start as a monolith. Decompose when complexity and team size slow delivery, not because of load. Load alone is solved by cloning instances (X-axis) or partitioning by key (Z-axis).
 * Rule out process causes first: manual testing, no CI, waterfall. Fixing those can be enough.
-* A modular monolith with service-shaped boundaries (own tables, references by id, events through an outbox) makes a later extraction a deployment change, not a rewrite. In this repo a feature can stay a module.
+* A modular monolith with service-shaped boundaries (own tables, references by id, events through an outbox) makes a later extraction a deployment change, not a rewrite. In this repo that is a `Features/{Name}Feature/` module (below); it can stay a module.
 * Size is not the measure. A service fits when one small team can change, test and deploy it without coordinating. If one requirement change touches several services, the split is wrong: a distributed monolith has the costs of both styles.
 * Take the simple side of each pair until a named force pushes you over:
 
@@ -50,7 +55,7 @@ Database per service
 2. **Services.** Decompose by business capability or by DDD subdomain. Both give business-shaped, stable boundaries; never split by technical layer. Then apply SRP and the Common Closure Principle: code that changes together for one reason lives together.
 3. **APIs.** Give each operation an entry service, then list what it needs from other services. Those needs become collaboration operations and events.
 4. **Obstacles per operation:** chatty round-trips (batch API, or merge the services), sync calls in the request path (messaging, replicas), multi-service updates (saga), god classes (one model per bounded context).
-5. **Communication per interaction.** Pick the style first (one-to-one or one-to-many, sync or async), then the technology. Default: async messaging between services, with REST or gRPC at the edge behind a gateway.
+5. **Communication per interaction.** Pick the style first (one-to-one or one-to-many, sync or async), then the technology. Default: async messaging between services, with REST or gRPC at the edge behind a gateway. Between modules of one deployable: in-process MediatR notifications, no broker.
 6. **Inside each service:** aggregates, domain events through an outbox, sagas for cross-service commands, views for cross-service queries.
 7. **Tests and production:** a contract test per interaction, a component test per service, and few end-to-end journeys. Plus a health check, logs, tracing, metrics, an access token and externalized config.
 
@@ -98,29 +103,35 @@ Worth it now?  yes: Restaurant Service deploys daily, and every deploy blocks or
 
 ## This repo (C#)
 
+One deployable (`FF.Api`) on SQL Server. A bounded context is a feature module; reference module `FactoringFeature`:
+
 ```
-features/<feature>/                  a bounded context: a module today, a service if it must deploy alone
-├── _contracts/                      commands, replies and events other features use: the async API
-└── <module>/
-    ├── _dto/                        rejects malformed commands before they reach the domain
-    ├── api/REST, api/GraphQL/       inbound adapters, API composition endpoints
-    ├── api/EventHandlers/           event, command and reply handlers (idempotent)
-    ├── application/                 use cases, saga orchestrators (state machines)
-    ├── domain/                      aggregates/, events/, policies/, value-objects/
-    ├── infrastructure/postgress/    repositories, outbox, processed_messages, CQRS view tables
-    ├── integration/                 proxies to other services, anti-corruption layer, Hubspot/, Twillio/
-    └── test/                        aggregate, saga and handler unit tests; contract tests
-src/_contracts/                      contracts shared by several features
-src/_config/                         timeouts, circuit breaker thresholds, broker and DB locations: defaults, overridden per environment
+API/FF-API/
+├── FF.Api/Features/{Name}Feature/    a bounded context: a module today, a service if it must deploy alone
+│   ├── _DTO/                         requests; rejects malformed commands before the domain
+│   ├── _CRITICAL/                    business-critical enums and constants
+│   ├── API/REST/                     controller, partial by Commands / Queries
+│   ├── Application/                  use cases (+ saga orchestrators, only when a saga exists)
+│   ├── Domain/                       aggregates, value objects
+│   ├── Infrastructure/               own DbContext + schema, migrations, outbox table + dispatcher
+│   ├── Integration/                  anti-corruption layer to the monolith and vendors (HubSpot mapper, lifecycle events)
+│   └── {Name}ServiceExtensions.cs    DI registration + its own migrate call
+├── _CONTRACTS/                       FF.Contracts: interfaces shared by features and the monolith (IHubSpotDataMapper<T>)
+└── FF.Tests/Features/{Name}Feature/
 ```
 
-* Where the house rules differ from the book, the house rules win. The book's aggregate `process()` throws on an invalid command. Here the domain returns a result (no exceptions in the domain), and `_dto` has already rejected malformed input.
-* .NET equivalents (the book names only Polly):
-   * Polly or `Microsoft.Extensions.Http.Resilience`: timeouts and circuit breakers.
-   * MassTransit or NServiceBus: outbox and idempotent consumers.
-   * Debezium: tails the Postgres WAL.
-   * YARP: a custom gateway.
-   * PactNet: contract tests.
-   * OpenTelemetry: tracing.
-   * ASP.NET Core health checks.
+What the repo uses today:
+
+| Pattern | In the repo |
+|---|---|
+| Domain events | `IDomainEventPublisher` → MediatR `IMediator.Publish`, in process |
+| Transactional outbox, monolith | `AddProcessingQueueEntry<T>` writes a `ProcessingQueueEntry` row in the same unit of work; a `QueueProcessorService<T>` per type polls it every 10 s |
+| Transactional outbox, feature | `FactoringOutboxMessage` table; `FactoringOutboxDispatcher` polls (batch 20, 10 s idle delay, 5-min lease) and publishes through MediatR |
+| One worker across instances | `ActiveAppInstanceCoordinator` (Redis set `ff:app:instances`): the newest instance runs the hosted services, older ones stop theirs and keep serving HTTP |
+| Health check | `/health`, `/health/details`: SQL Server plus account-balance and client-funds consistency checks |
+| Logs, tracing, exceptions | Serilog → Application Insights |
+
+* Both outboxes are polling publishers. Log tailing on SQL Server would mean CDC; only when polling load hurts.
+* Not in the repo; add one only when a named force needs it: Polly or `Microsoft.Extensions.Http.Resilience` (circuit breakers), a broker plus MassTransit (cross-process outbox, idempotent consumers), YARP (a composing gateway), PactNet (contract tests), OpenTelemetry.
+* Where the house rules differ from the book, the house rules win. The book's aggregate `process()` throws on an invalid command. Here the domain returns the object or `null`, or a `bool` (no exceptions in the domain), and `_DTO` has already rejected malformed input.
 * Use `solid-principles` and `design-patterns` for the classes inside one service. Use this skill for the boundaries between services.

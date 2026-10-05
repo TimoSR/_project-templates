@@ -1,0 +1,695 @@
+<title>High-Quality Tokens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Code+Pro:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+/* Skill page standard, after rustdoc and the Rust book. Layout: full-height sidebar (command, sections, rules, files) beside one reading column (masthead, load profile, one block per skill section). */
+:root {
+  --paper: #ffffff;
+  --sidebar: #f4f6f9;
+  --ink: #1b1f27;
+  --ink-muted: #5b6270;
+  --line: #e1e4ea;
+  --accent: #1b5dbc;
+  --accent-soft: #e6edf7;
+  --mark: #ffe27a;
+  --note: #f5f6f3;
+  --bad: #b42a20;
+  --bad-soft: #fcefed;
+  --good: #1b7a45;
+  --good-soft: #eaf6ee;
+  --code-paper: #f5f6f8;
+  --code-keyword: #8959a8;
+  --code-title: #4271ae;
+  --code-string: #5f7a00;
+  --code-number: #c2610c;
+  --code-comment: #7c7f7b;
+  --font-heading: 'Fira Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-mono: 'Source Code Pro', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --measure: 72ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1d2027;
+    --sidebar: #16181e;
+    --ink: #e3e5ea;
+    --ink-muted: #9aa0ad;
+    --line: #30343e;
+    --accent: #8ab4f8;
+    --accent-soft: #233149;
+    --mark: rgba(255, 214, 90, 0.3);
+    --note: #24272f;
+    --bad: #f28b82;
+    --bad-soft: #3a2222;
+    --good: #81c995;
+    --good-soft: #1e3326;
+    --code-paper: #262a33;
+    --code-keyword: #b294bb;
+    --code-title: #81a2be;
+    --code-string: #b5bd68;
+    --code-number: #de935f;
+    --code-comment: #969896;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1d2027;
+  --sidebar: #16181e;
+  --ink: #e3e5ea;
+  --ink-muted: #9aa0ad;
+  --line: #30343e;
+  --accent: #8ab4f8;
+  --accent-soft: #233149;
+  --mark: rgba(255, 214, 90, 0.3);
+  --note: #24272f;
+  --bad: #f28b82;
+  --bad-soft: #3a2222;
+  --good: #81c995;
+  --good-soft: #1e3326;
+  --code-paper: #262a33;
+  --code-keyword: #b294bb;
+  --code-title: #81a2be;
+  --code-string: #b5bd68;
+  --code-number: #de935f;
+  --code-comment: #969896;
+  color-scheme: dark;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16.5px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; font-family: var(--font-heading); text-wrap: balance; }
+p { margin: 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--code-paper); padding: 0.1em 0.35em; border-radius: 3px; }
+pre code { font-size: inherit; background: none; padding: 0; border-radius: 0; }
+mark { color: inherit; background: linear-gradient(transparent 50%, var(--mark) 50%); padding-inline: 0.12em; }
+strong { font-weight: 600; }
+
+.page { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+
+/* Sidebar: what the skill is called, then everything on the page as links. */
+.sidebar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: grid;
+  align-content: start;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-5) var(--space-7);
+  background: var(--sidebar);
+  border-right: 1px solid var(--line);
+  font-family: var(--font-heading);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.sidebar-identity { display: grid; gap: var(--space-2); justify-items: start; padding-bottom: var(--space-5); border-bottom: 1px solid var(--line); }
+.command { font-size: 15px; font-weight: 600; color: var(--ink); background: none; padding: 0; overflow-wrap: anywhere; }
+.argument-hint { font-weight: 400; color: var(--ink-muted); }
+.pill { font-size: 12px; font-weight: 500; color: var(--ink-muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; background: var(--paper); }
+.sidebar-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: var(--space-2); }
+.sidebar-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.sidebar-links a { display: block; padding: 5px var(--space-2); margin-inline: calc(-1 * var(--space-2)); border-radius: 4px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-links a:hover { background: var(--accent-soft); text-decoration: none; }
+.sidebar-links a.is-current { color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.rule-index a { color: var(--ink-muted); }
+.file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.file-list li { display: grid; gap: 2px; }
+.file-name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.file-lines { font-size: 12.5px; color: var(--ink-muted); }
+.file-note { font-size: 13px; color: var(--ink-muted); }
+
+/* Reading column, centered in the space beside the sidebar. */
+.main {
+  width: 100%;
+  max-width: 880px;
+  min-width: 0;
+  margin-inline: auto;
+  padding-inline: clamp(var(--space-5), 5vw, var(--space-8));
+  padding-block: var(--space-7) var(--space-9);
+  display: grid;
+  gap: var(--space-7);
+  align-content: start;
+}
+
+/* Masthead: path, name, what it does, when it fires. */
+.masthead { display: grid; gap: var(--space-4); }
+.masthead-top { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.breadcrumb { font-family: var(--font-mono); font-size: 13.5px; color: var(--ink-muted); overflow-wrap: anywhere; }
+.summary-toggle {
+  font-family: var(--font-heading);
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.summary-toggle:hover { border-color: var(--ink-muted); }
+.summary-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.skill-name { font-size: clamp(2rem, 4.5vw, 2.75rem); font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; }
+.skill-kind { font-weight: 400; color: var(--ink-muted); }
+.lede { font-size: clamp(1.1rem, 2vw, 1.25rem); line-height: 1.5; max-width: 60ch; }
+.source { font-size: 14.5px; color: var(--ink-muted); font-style: italic; }
+.triggers { display: grid; gap: var(--space-3); margin: var(--space-2) 0 0; font-family: var(--font-heading); }
+.trigger-row { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: var(--space-4); align-items: baseline; }
+.trigger-row dt { font-size: 13px; font-weight: 600; color: var(--good); }
+.trigger-row.not dt { color: var(--bad); }
+.trigger-row dd { margin: 0; min-width: 0; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip { font-size: 13.5px; line-height: 1.4; padding: 4px 10px; background: var(--sidebar); border-radius: 4px; }
+.chip-said { font-family: var(--font-mono); font-size: 13px; }
+
+/* Load profile: what sits in context, and when. Numbers come from `skill_page.mjs stats`. */
+.load-profile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  border-block: 1px solid var(--line);
+  font-family: var(--font-heading);
+}
+.load-stage { display: grid; gap: var(--space-1); align-content: start; padding: var(--space-5); min-width: 0; }
+.load-stage:first-child { padding-left: 0; }
+.load-stage:last-child { padding-right: 0; }
+.load-when { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.load-what { font-family: var(--font-mono); font-size: 13.5px; font-weight: 500; overflow-wrap: anywhere; }
+.load-figure { font-size: 1.75rem; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.load-unit { font-size: 0.9rem; font-weight: 400; color: var(--ink-muted); }
+.load-bar { height: 4px; margin-block: var(--space-1); background: var(--line); border-radius: 2px; overflow: hidden; }
+.load-bar span { display: block; width: var(--fill); height: 100%; background: var(--accent); }
+.load-note { font-size: 13px; line-height: 1.45; color: var(--ink-muted); }
+.load-arrow { align-self: center; color: var(--ink-muted); font-size: 1.2rem; }
+
+/* Sections. */
+.content { display: grid; gap: var(--space-8); min-width: 0; }
+.block { display: grid; gap: var(--space-5); min-width: 0; scroll-margin-top: var(--space-5); }
+.block > h2 { font-size: 1.6rem; font-weight: 500; line-height: 1.2; padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); }
+.block > p { max-width: var(--measure); }
+.thesis { font-size: 1.22rem; line-height: 1.5; max-width: 56ch; }
+
+/* Bullets: the default form. */
+.points { margin: 0; padding-left: 1.25em; display: grid; gap: var(--space-2); max-width: var(--measure); }
+.points ul { margin: var(--space-2) 0 0; padding-left: 1.25em; display: grid; gap: var(--space-1); }
+
+/* Rule: a collapsible item, statement as its summary; the triangle hangs in the margin so text and examples share one left edge. */
+.rule { min-width: 0; padding-top: var(--space-5); border-top: 1px solid var(--line); scroll-margin-top: var(--space-5); }
+.block > h2 + .rule { padding-top: 0; border-top: 0; }
+.rule-statement {
+  position: relative;
+  list-style: none;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.4;
+  max-width: var(--measure);
+}
+.rule-statement::-webkit-details-marker { display: none; }
+.rule-statement::before { content: '▾'; position: absolute; right: 100%; margin-right: 0.4em; color: var(--ink-muted); font-weight: 400; }
+.rule:not([open]) > .rule-statement::before { content: '▸'; }
+.rule-body { display: grid; gap: var(--space-3); min-width: 0; padding-top: var(--space-3); }
+.rule-why { max-width: var(--measure); }
+.label { font-family: var(--font-heading); font-size: 13px; font-weight: 600; color: var(--accent); margin-right: var(--space-2); }
+
+/* Compare: a diff, ✗ row above ✓ row. */
+.compare { min-width: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.compare-row { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); }
+.compare-row + .compare-row { border-top: 1px solid var(--line); }
+.compare-mark { padding-top: var(--space-3); text-align: center; font-family: var(--font-heading); font-weight: 700; line-height: 1.6; }
+.compare-row.bad { background: var(--bad-soft); }
+.compare-row.good { background: var(--good-soft); }
+.compare-row.bad .compare-mark { color: var(--bad); }
+.compare-row.good .compare-mark { color: var(--good); }
+.compare-body { display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-3) var(--space-4) var(--space-3) 0; }
+.compare-caption { font-family: var(--font-heading); font-size: 13px; color: var(--ink-muted); }
+.compare-body pre { margin: 0; overflow-x: auto; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.6; tab-size: 4; }
+
+/* Code, diagrams, Mermaid, and the caption under any example. */
+.code, .diagram, .mermaid {
+  position: relative;
+  margin: 0;
+  min-width: 0;
+  overflow-x: auto;
+  padding: var(--space-4) var(--space-5);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  tab-size: 4;
+}
+.code, .diagram { background: var(--code-paper); }
+.mermaid { background: var(--paper); border: 1px solid var(--line); }
+.code[data-language]::before {
+  content: attr(data-language);
+  display: block;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.copy-button {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  color: var(--ink-muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px var(--space-2);
+  cursor: pointer;
+}
+.copy-button:hover { color: var(--ink); border-color: var(--ink-muted); }
+.caption { font-family: var(--font-heading); font-size: 13.5px; color: var(--ink-muted); max-width: var(--measure); }
+.note { display: grid; gap: var(--space-2); padding: var(--space-4) var(--space-5); background: var(--note); border-radius: 6px; max-width: var(--measure); }
+
+/* Tables. ✗ / ✓ columns take .bad / .good. */
+.table-wrap { min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-family: var(--font-heading); font-size: 14.5px; line-height: 1.5; }
+th { text-align: left; font-weight: 600; padding: 10px var(--space-4); background: var(--sidebar); border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px var(--space-4); border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 500; }
+th.bad { color: var(--bad); }
+th.good { color: var(--good); }
+td.bad { background: var(--bad-soft); }
+td.good { background: var(--good-soft); }
+
+/* Steps: numbered because the order is real. */
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.step { position: relative; counter-increment: step; display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-4) 0 var(--space-4) 2.75rem; border-top: 1px solid var(--line); }
+.step:first-child { border-top: 0; padding-top: 0; }
+.step::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: var(--space-4);
+  width: 1.8rem;
+  height: 1.8rem;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 50%;
+}
+.step:first-child::before { top: 0; }
+.step-title { font-family: var(--font-heading); font-weight: 600; max-width: var(--measure); padding-top: 3px; }
+.step-detail { max-width: var(--measure); }
+
+/* Checklist. */
+.checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.checklist li { position: relative; padding-left: 1.9rem; max-width: var(--measure); }
+.checklist li::before { content: ''; position: absolute; left: 0; top: 0.32em; width: 1rem; height: 1rem; border: 1.5px solid var(--ink-muted); border-radius: 3px; }
+
+/* highlight.js tokens: Tomorrow / Tomorrow Night, the Rust book's palette. */
+.hljs-keyword, .hljs-built_in, .hljs-selector-tag, .hljs-meta .hljs-keyword { color: var(--code-keyword); }
+.hljs-title, .hljs-type, .hljs-name, .hljs-section { color: var(--code-title); }
+.hljs-string, .hljs-regexp, .hljs-symbol, .hljs-attr, .hljs-attribute { color: var(--code-string); }
+.hljs-number, .hljs-literal, .hljs-bullet { color: var(--code-number); }
+.hljs-comment, .hljs-quote, .hljs-meta { color: var(--code-comment); font-style: italic; }
+
+@media (max-width: 960px) {
+  .page { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: static; height: auto; overflow: visible; gap: var(--space-3); padding: var(--space-4) clamp(var(--space-5), 5vw, var(--space-8)); border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar-identity { grid-auto-flow: column; align-items: center; justify-content: start; gap: var(--space-3); padding-bottom: 0; border-bottom: 0; }
+  .sidebar-label, .rule-index, .sidebar-group:last-child { display: none; }
+  .sidebar-links { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); }
+  .sidebar-links a { margin-inline: 0; padding: 2px 0; }
+  .main { padding-block: var(--space-6) var(--space-8); }
+}
+@media (max-width: 760px) {
+  .load-profile { grid-template-columns: minmax(0, 1fr); }
+  .load-stage, .load-stage:first-child, .load-stage:last-child { padding: var(--space-3) 0; }
+  .load-arrow { line-height: 1; transform: rotate(90deg); justify-self: start; padding-left: var(--space-1); }
+}
+@media (max-width: 560px) {
+  .content { gap: var(--space-7); }
+  .trigger-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+  .compare-row { grid-template-columns: 2rem minmax(0, 1fr); }
+  .rule-statement::before { margin-right: 0.25em; }
+}
+</style>
+
+<div class="page">
+  <!-- Sidebar. Command, pill and file lines come from `skill_page.mjs stats`. -->
+  <aside class="sidebar">
+    <div class="sidebar-identity">
+      <code class="command">/high-quality-tokens</code>
+      <!-- With an argument-hint: <code class="command">/building-skills <span class="argument-hint">[what the skill should do]</span></code> -->
+      <span class="pill">Auto + /command</span>
+    </div>
+    <nav class="sidebar-group" aria-label="Sections">
+      <p class="sidebar-label">Sections</p>
+      <ul class="sidebar-links">
+        <li><a href="#the-test">The test</a></li>
+        <li><a href="#bullets-and-examples">Bullets and examples</a></li>
+        <li><a href="#cut-and-keep">Cut and keep</a></li>
+        <li><a href="#condensing">Condensing existing text</a></li>
+        <li><a href="#failure-modes">Two failure modes</a></li>
+      </ul>
+    </nav>
+    <nav class="sidebar-group rule-index" aria-label="Rules">
+      <p class="sidebar-label">Rules</p>
+      <ul class="sidebar-links">
+        <li><a href="#rule-concrete-example">Every concept gets an example</a></li>
+        <li><a href="#rule-visual-form">Match form to shape</a></li>
+        <li><a href="#rule-ascii-or-mermaid">ASCII or Mermaid</a></li>
+        <li><a href="#rule-comments-say-why">Comments say why</a></li>
+        <li><a href="#rule-cut-and-keep">Cut filler, keep reasons</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-group">
+      <p class="sidebar-label">Files</p>
+      <ul class="file-list">
+        <li><span class="file-name">SKILL.md</span><span class="file-lines">75 lines · loads on invoke</span><span class="file-note">The rules on this page.</span></li>
+        <li><span class="file-name">examples.md</span><span class="file-lines">335 lines · loads on demand</span><span class="file-note">SOLID rewrite, one of each visual form, Mermaid types and traps.</span></li>
+      </ul>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- Masthead. Name from stats; lede and triggers from the description. -->
+    <header class="masthead">
+      <div class="masthead-top">
+        <p class="breadcrumb">.claude/skills/high-quality-tokens/</p>
+        <button class="summary-toggle" type="button" aria-pressed="false">Summary</button>
+      </div>
+      <h1 class="skill-name"><span class="skill-kind">Skill</span> High-Quality Tokens</h1>
+      <p class="lede">Writes dense, high-signal text: every token carries information the reader or a later session needs.</p>
+      <!-- When the skill names a source (book, course, docs): <p class="source">Source: Gary McLean Hall, Adaptive Code, 2nd ed.</p> -->
+      <dl class="triggers">
+        <div class="trigger-row">
+          <dt>Fires when</dt>
+          <dd>
+            <ul class="chips">
+              <li class="chip">writing reports, docs, READMEs</li>
+              <li class="chip">CLAUDE.md, skills, memory files</li>
+              <li class="chip">plans, PR descriptions, commit messages</li>
+              <li class="chip">code comments, explanations, summaries</li>
+              <li class="chip chip-said"><mark>"shorten"</mark></li>
+              <li class="chip chip-said"><mark>"tighten"</mark></li>
+              <li class="chip chip-said"><mark>"condense"</mark></li>
+              <li class="chip">output is too long, padded or repetitive</li>
+            </ul>
+          </dd>
+        </div>
+        <!-- Only when the description has a "Not for" clause:
+        <div class="trigger-row not">
+          <dt>Not for</dt>
+          <dd>
+            <ul class="chips">
+              <li class="chip">explaining a concept with no code to write</li>
+            </ul>
+          </dd>
+        </div>
+        -->
+      </dl>
+    </header>
+
+    <!-- Load profile. A /command only skill: the first stage reads "Not in context" with no bar. -->
+    <section class="load-profile" aria-label="Load profile">
+      <div class="load-stage">
+        <p class="load-when">Always in context</p>
+        <p class="load-what">description</p>
+        <p class="load-figure">684 <span class="load-unit">/ 1,024 chars</span></p>
+        <div class="load-bar"><span style="--fill: 67%"></span></div>
+        <p class="load-note">Decides when the skill fires.</p>
+      </div>
+      <span class="load-arrow" aria-hidden="true">→</span>
+      <div class="load-stage">
+        <p class="load-when">On invoke</p>
+        <p class="load-what">SKILL.md</p>
+        <p class="load-figure">75 <span class="load-unit">/ 500 lines</span></p>
+        <div class="load-bar"><span style="--fill: 15%"></span></div>
+        <p class="load-note">The rules on this page.</p>
+      </div>
+      <span class="load-arrow" aria-hidden="true">→</span>
+      <div class="load-stage">
+        <p class="load-when">On demand</p>
+        <p class="load-what">1 file</p>
+        <p class="load-figure">335 <span class="load-unit">lines</span></p>
+        <p class="load-note">Read only when SKILL.md sends Claude there.</p>
+      </div>
+    </section>
+
+    <div class="content">
+      <!-- Thesis: the skill's orienting line, "the one idea" or "the test". -->
+      <section class="block" id="the-test">
+        <h2>The test</h2>
+        <p class="thesis">For every line: <mark>would the reader understand or act differently without it?</mark> If not, cut it.</p>
+        <ul class="points">
+          <li>Match the depth to what was asked. A true fact nobody asked for is still noise.
+            <ul>
+              <li>Point to a deeper topic in one line instead of writing a section on it.</li>
+            </ul>
+          </li>
+          <li>Dense is not cryptic: a newcomer must understand it from the text alone. Over-compression fails like padding.</li>
+        </ul>
+      </section>
+
+      <!-- Rules: one details.rule per rule, open, with an id the sidebar links to. Example = .compare, .code, .diagram, .table-wrap or .mermaid. -->
+      <section class="block" id="bullets-and-examples">
+        <h2>Bullets and examples</h2>
+        <details class="rule" id="rule-concrete-example" open>
+          <summary class="rule-statement">Every concept gets a concrete example.</summary>
+          <div class="rule-body">
+            <p class="rule-why"><span class="label">Why</span>A rule without one is half-explained, and a name in backticks is not an example.</p>
+            <div class="compare">
+              <div class="compare-row bad">
+                <span class="compare-mark" aria-label="Wrong">✗</span>
+                <div class="compare-body">
+                  <p>It's important to note that, in order to avoid issues, you should basically validate input early.</p>
+                </div>
+              </div>
+              <div class="compare-row good">
+                <span class="compare-mark" aria-label="Right">✓</span>
+                <div class="compare-body">
+                  <p>Validate input in the DTO, before it reaches the domain.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+        <details class="rule" id="rule-visual-form" open>
+          <summary class="rule-statement">Pick the visual form that matches the shape of the idea.</summary>
+          <div class="rule-body">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Shape of the idea</th><th>Form</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Hierarchy, layers, ownership</td><td>Tree</td></tr>
+                  <tr><td>Steps, data moving between nodes</td><td>Flow</td></tr>
+                  <tr><td>Items compared on the same attributes</td><td>Table</td></tr>
+                  <tr><td>A rule applied, a change</td><td>Before → after (✗/✓)</td></tr>
+                  <tr><td>Loops, participants, states</td><td>Mermaid</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+        <details class="rule" id="rule-ascii-or-mermaid" open>
+          <summary class="rule-statement">Straight lines and trees stay ASCII; Mermaid is for loops, merges, participants and states.</summary>
+          <div class="rule-body">
+            <pre class="diagram">request → DTO validation ─✗→ 400 (the domain never sees it)
+                         ─✓→ use case → domain → postgres → event</pre>
+            <pre class="mermaid">flowchart TD
+    charge[charge card] --> paid{paid?}
+    paid -- yes --> invoicePaid[mark invoice paid]
+    paid -- no --> retriesLeft{retries left?}
+    retriesLeft -- yes --> wait[wait 24 hours] --> charge
+    retriesLeft -- no --> pastDue[mark subscription past due]</pre>
+            <p class="caption">Payment retry: the loop back to "charge card" is what ASCII draws badly.</p>
+            <div class="note">
+              <p><span class="label">Note</span>Mermaid only where it renders as a picture or a model reads it. A terminal, code comment or commit message shows the raw source: use ASCII there.</p>
+            </div>
+          </div>
+        </details>
+        <details class="rule" id="rule-comments-say-why" open>
+          <summary class="rule-statement">Code comments say why, not what.</summary>
+          <div class="rule-body">
+            <div class="compare">
+              <div class="compare-row bad">
+                <span class="compare-mark" aria-label="Wrong">✗</span>
+                <div class="compare-body">
+                  <pre><code class="language-csharp">if (amount &lt;= 0) return false; // check the amount</code></pre>
+                </div>
+              </div>
+              <div class="compare-row good">
+                <span class="compare-mark" aria-label="Right">✓</span>
+                <div class="compare-body">
+                  <p class="compare-caption">the comment carries the reason a reader can't re-derive</p>
+                  <pre><code class="language-csharp">if (amount &lt;= 0) return false; // fail early: the domain never sees an invalid amount</code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="block" id="cut-and-keep">
+        <h2>Cut and keep</h2>
+        <details class="rule" id="rule-cut-and-keep" open>
+          <summary class="rule-statement">Cut preamble, closers, repetition, filler and decoration. Keep decisions with their reason.</summary>
+          <div class="rule-body">
+            <p class="rule-why"><span class="label">Why</span>The reason is what a later reader can't re-derive; the rest they skip or already know.</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Kind</th><th class="bad">✗ Cut</th><th class="good">✓ Keep</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Opening</td><td class="bad">"Here's an overview of…"</td><td class="good">The conclusion first</td></tr>
+                  <tr><td>Closing</td><td class="bad">"Let me know if…", recaps</td><td class="good">Stop at the last fact</td></tr>
+                  <tr><td>Facts</td><td class="bad">"various", "basically"</td><td class="good">Names, numbers, paths, <code>file:line</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- Steps: only for a real sequence. -->
+      <section class="block" id="condensing">
+        <h2>Condensing existing text</h2>
+        <ol class="steps">
+          <li class="step"><p class="step-title">Extract the ideas, one line each.</p></li>
+          <li class="step"><p class="step-title">Drop what the reader knows and what repeats.</p></li>
+          <li class="step"><p class="step-title">Order by dependency; nest refinements under their parent.</p></li>
+          <li class="step"><p class="step-title">Write each idea once, as a bullet with its example.</p></li>
+          <li class="step">
+            <p class="step-title">Check against the original.</p>
+            <p class="step-detail">Every idea that changes understanding or action survived. Fix weak or wrong content found on the way: padding often hides it.</p>
+          </li>
+        </ol>
+        <!-- Checklist, for a checklist SKILL.md tells Claude to run:
+        <ul class="checklist">
+          <li>Trigger test in a fresh context: both should-trigger prompts fire, the near-miss does not</li>
+        </ul>
+        -->
+        <!-- Code block outside a compare (gets a copy button):
+        <pre class="code" data-language="bash"><code class="language-bash">node scripts/skill_page.mjs check page.html</code></pre>
+        -->
+      </section>
+
+      <section class="block" id="failure-modes">
+        <h2>Two failure modes</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th class="bad">✗ Padded</th><th class="bad">✗ Over-compressed</th><th class="good">✓ Target</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Length</td><td>~200 lines</td><td>~12 lines</td><td>~80 lines</td></tr>
+              <tr><td>Form</td><td>Each idea stated 3×</td><td>One bullet, names in backticks</td><td>One bullet + a ✗/✓ example</td></tr>
+              <tr><td>Teaches a newcomer</td><td>Slowly</td><td>No: a cheat sheet</td><td>Yes</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  if (window.hljs) {
+    window.hljs.configure({ cssSelector: 'pre code[class*="language-"]', ignoreUnescapedHTML: true })
+    window.hljs.highlightAll()
+  }
+
+  // Summary: collapse every rule to its statement, like rustdoc's Summary button.
+  const summaryButton = document.querySelector('.summary-toggle')
+  function toggleSummary() {
+    const isCollapsing = summaryButton.getAttribute('aria-pressed') !== 'true'
+    for (const rule of document.querySelectorAll('details.rule')) {
+      rule.open = !isCollapsing
+    }
+    summaryButton.setAttribute('aria-pressed', String(isCollapsing))
+    summaryButton.textContent = isCollapsing ? 'Show all' : 'Summary'
+  }
+  if (summaryButton) {
+    summaryButton.addEventListener('click', toggleSummary)
+  }
+
+  // Copy buttons on code blocks, like the Rust book's.
+  const copyLabelMilliseconds = 1500
+  function showCopyLabel(button, text) {
+    button.textContent = text
+    window.setTimeout(function resetLabel() { button.textContent = 'Copy' }, copyLabelMilliseconds)
+  }
+  function selectForManualCopy(button, codeElement) {
+    window.getSelection().selectAllChildren(codeElement)
+    showCopyLabel(button, 'Press Ctrl+C')
+  }
+  function copyCode(button, codeElement) {
+    if (!navigator.clipboard) {
+      selectForManualCopy(button, codeElement)
+      return
+    }
+    navigator.clipboard.writeText(codeElement.innerText).then(
+      function copied() { showCopyLabel(button, 'Copied') },
+      function refused() { selectForManualCopy(button, codeElement) },
+    )
+  }
+  for (const block of document.querySelectorAll('pre.code')) {
+    const codeElement = block.querySelector('code') || block
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'copy-button'
+    button.textContent = 'Copy'
+    button.addEventListener('click', function onCopyClick() { copyCode(button, codeElement) })
+    block.appendChild(button)
+  }
+
+  // Current section highlighted in the sidebar, like the Rust book's chapter list.
+  const sectionLinks = {}
+  for (const link of document.querySelectorAll('.sidebar-links a[href^="#"]')) {
+    sectionLinks[link.getAttribute('href').slice(1)] = link
+  }
+  function markCurrentSection(entries) {
+    for (const entry of entries) {
+      const link = sectionLinks[entry.target.id]
+      if (link && entry.isIntersecting) {
+        for (const otherLink of document.querySelectorAll('.sidebar-links a.is-current')) {
+          otherLink.classList.remove('is-current')
+        }
+        link.classList.add('is-current')
+      }
+    }
+  }
+  if ('IntersectionObserver' in window) {
+    const sectionObserver = new IntersectionObserver(markCurrentSection, { rootMargin: '0px 0px -70% 0px' })
+    for (const section of document.querySelectorAll('section.block[id]')) {
+      sectionObserver.observe(section)
+    }
+  }
+</script>

@@ -1,11 +1,16 @@
 ---
 name: system-integration
-description: Connects systems over the wire - choosing the transport (REST, GraphQL, gRPC, polling, long polling, server-sent events, WebSockets, SignalR or Socket.IO, WebRTC, webhooks, TCP vs UDP), the messaging style (sync vs async, queue vs event stream, Redis Pub/Sub and Streams, RabbitMQ, Kafka, Azure Service Bus), data formats and encodings (JSON, CSV, XML, YAML, Protobuf, UTF-8, Base64, ISO 8601 dates, multipart uploads), and third-party integrations (auth and JWT, SMS, email, payments, scraping), plus Redis caching, cron and Azure Functions, blob storage and OpenAPI docs. Use when wiring a feature to another system or vendor, pushing live updates to clients, sending or receiving webhooks, picking a broker, parsing or serializing data, handling uploads, dates or time zones, scheduling jobs, or when the user mentions CORS, low coupling, real-time updates or the update problem.
+description: Connects systems over the wire - picks the transport (REST, GraphQL, gRPC, polling, SSE, WebSockets, webhooks, TCP vs UDP), the queue or broker (Redis Pub/Sub and Streams, RabbitMQ, Kafka, Azure Service Bus), data formats and encodings (JSON, CSV, XML, Protobuf, Base64, ISO 8601), and vendor adapters (Stripe, Twilio, HubSpot, AIIA, KYC), plus Redis caching, scheduled jobs and blob storage. Use when wiring a feature to another system or vendor, pushing live updates to clients, receiving or verifying webhooks, picking a broker, parsing or serializing data, handling uploads, dates or time zones, scheduling jobs, or fixing CORS errors. Not for service boundaries, sagas, the outbox or CQRS (microservices-patterns), or for designing our own REST endpoints (api-design).
 ---
 
 # System Integration
 
-Source: the user's *System Integration* course notes (KEA), checked against current docs and mapped to this repo. Where the notes were wrong or outdated, this skill has the corrected version. Boundaries between our own services (sagas, outbox, CQRS, gateways) belong to `microservices-patterns`. This skill covers the wire: transports, brokers, formats and third parties.
+Source: the user's KEA *System Integration* course notes, corrected against current docs and mapped to this repo.
+
+Boundaries:
+* This skill: the wire. Transports, broker choice and delivery mechanics, formats, vendor adapters and their webhooks (inbox dedupe).
+* `microservices-patterns`: consistency between our own services or modules. Sagas, the transactional outbox, idempotent consumers of our events, CQRS views, gateways.
+* `api-design`: the shape of our own REST endpoints once REST is chosen (routes, status codes, pagination, versioning, OpenAPI contract).
 
 ## The one idea
 
@@ -43,7 +48,7 @@ both must be up        sender retries        ONE consumer           consumer gro
 | Payload | JSON, UTF-8 | Protobuf or MessagePack | measured size or parse time hurts |
 | Time | UTC instant, ISO 8601 | local time + IANA zone id | a future local appointment ("09:00 in Copenhagen") |
 | Transport | TCP (through HTTP) | UDP | a late packet is worthless: game state, voice, video |
-| Scheduled job | one timer trigger in one place | — | never in-process cron on a scaled-out app |
+| Scheduled job | in-process scheduler on one elected instance (repo: Quartz + `ActiveAppInstanceCoordinator`) | — | never ungated in-process cron on a scaled-out app |
 | Auth | managed provider + JWT validation | — | never roll your own |
 
 * On every recommendation, name the side of the trade-off you took: Speed vs Simplicity, Latency vs Coupling, Lossless vs Lossy, Compression vs Time.
@@ -69,9 +74,9 @@ Sections: **T** = transports, **M** = messaging, **D** = data-formats, **V** = t
 | Client calls `GET /orders/9` every second | SSE stream for that order; a webhook if the client is a server | T §3 |
 | SSE works, but after a deploy clients never reconnect | a non-200 response or wrong `Content-Type` stops `EventSource` for good | T §3 |
 | WebSocket clients go silent after a Wi-Fi drop | heartbeat + reconnect with backoff, or SignalR | T §3 |
-| Pushes only reach clients connected to one instance | backplane: Redis Pub/Sub or Azure SignalR Service | T §3 |
+| Pushes only reach clients connected to one instance | backplane: Redis Pub/Sub, Azure SignalR Service, or Hot Chocolate Redis subscriptions | T §3 |
 | CORS error in the browser, Postman works | allow the origin in the API's CORS policy; CORS is enforced by browsers only | T §6 |
-| A vendor API change breaks the domain | adapter in `integration/<Vendor>/` maps their types to ours | V §1 |
+| A vendor API change breaks the domain | one adapter per vendor (`FF.App/Twilio/`, a feature's `Integration/`) maps their types to ours | V §1 |
 | Webhook handler charged a card twice | dedupe on the event id, in the same transaction as the effect | V §2 |
 | Vendor marks our webhook endpoint as failing | return 2xx within seconds, process from a queue | V §2 |
 | Anyone can POST to our webhook URL | verify the HMAC signature over the raw body | V §2 |
@@ -100,33 +105,30 @@ Trade-off      latency over simplicity: one open connection per tab
 ## This repo (C#)
 
 ```
-features/<feature>/<module>/
-├── _dto/                    rejects malformed bodies, webhook payloads and upload metadata before the domain
-├── api/REST/                endpoints, SSE streams, webhook receivers, uploads, OpenAPI metadata
-├── api/GraphQL/             schema, resolvers, subscriptions
-├── api/EventHandlers/       queue and stream consumers, webhook processors; all idempotent
-├── infrastructure/cache/    Redis: cache-aside, rate limits, locks, one-time codes
-└── integration/<Vendor>/    one adapter per vendor (Hubspot/, Twillio/): HTTP client, auth, signature check, mapping
-src/_config/infrastructure/  base URLs, timeouts, broker and Redis connections, secret names (values in env vars or Key Vault)
-_tools/docker/               local Redis, RabbitMQ, Postgres
-_tools/scripts/              backups, cron entries
-_tools/terraform/            Azure storage account, container registry, Functions, Service Bus
+API/FF-API/
+├── FF.Api/Controllers/{Vendor}/            webhook receivers: Aiia/, Stripe/, Kyc/ (GetId, ZingSec); HubSpot/ (OAuth callback)
+├── FF.Api/Subscriptions/                   GraphQL subscriptions (Hot Chocolate)
+├── FF.App/{Vendor}/, FF.App/Services/{Vendor}/   outbound adapters: Twilio/, Bank/ (AIIA), Kyc/, Services/HubSpot/, Services/DanskeBank/, Services/Biq/
+├── FF.App/Services/ProcessingQueue/        DB-backed work queue: ProcessingQueueEntry rows, polled by QueueProcessorService<T>
+├── FF.App/Services/Coordination/           ActiveAppInstanceCoordinator: only one instance runs hosted services
+├── FF.Api/Features/{Name}Feature/Integration/   a feature module's own vendor adapters (FactoringHubSpot*)
+└── FF.Api/appsettings.json + ConfigSettings.cs  config classes per vendor (TwilioConfig, AiiaConfig); secrets from Key Vault
 ```
 
 * House rules win over the notes: explicit namespace aliases (`using http = System.Net.Http;`), config objects at the top, units in names (`timeoutSeconds`), guard clauses, and no exceptions in the domain. The adapter catches vendor exceptions and returns a result.
-* .NET picks:
+* What the repo uses, and what to add only when the defaults table says so:
 
-| Need | Package |
-|---|---|
-| Outbound HTTP with timeout, retry, circuit breaker | `IHttpClientFactory` + `Microsoft.Extensions.Http.Resilience` |
-| SSE | `TypedResults.ServerSentEvents` (.NET 10+) |
-| WebSockets with reconnect, groups and scale-out | SignalR (+ Redis backplane or Azure SignalR Service) |
-| gRPC | `Grpc.AspNetCore` |
-| GraphQL | Hot Chocolate (server), StrawberryShake (client) |
-| Redis | `StackExchange.Redis` |
-| Brokers | `Azure.Messaging.ServiceBus`, `RabbitMQ.Client`, `Confluent.Kafka`; MassTransit on top for outbox and retries |
-| Formats | `System.Text.Json`, `CsvHelper`, `System.Xml.Linq`, `YamlDotNet`, `Google.Protobuf` |
-| JWT validation | `Microsoft.AspNetCore.Authentication.JwtBearer` |
-| OpenAPI | `Microsoft.AspNetCore.OpenApi` (`AddOpenApi()`, `MapOpenApi()`) + Scalar or Swagger UI |
-| Scraping | `AngleSharp` (static HTML), `Microsoft.Playwright` (JavaScript-rendered pages) |
-| Scheduling | Azure Functions timer trigger (isolated worker model); Hangfire or Quartz.NET when self-hosted |
+| Need | Repo today | Add when needed |
+|---|---|---|
+| Client ↔ our API | GraphQL, Hot Chocolate 15 (`HotChocolate.Fetching` for DataLoader); REST controllers for webhooks and feature modules | — |
+| Server → browser updates | GraphQL subscriptions over WebSocket (`graphql-ws`), `AddInMemorySubscriptions()`: a push reaches only clients on the instance that raised it | Redis subscription backplane before scaling out; SSE: `TypedResults.ServerSentEvents` |
+| Outbound HTTP | RestSharp `*ServiceAgent` classes (AIIA, Biq, Danske Bank, GetId, ZingSec); typed `AddHttpClient<T>` (Twilio); no retry or circuit-breaker package | `Microsoft.Extensions.Http.Resilience` |
+| Work that can finish later | MediatR notification → `ProcessingQueueEntry` row → `QueueProcessorService<T>` polls every 10 s; no broker | `Azure.Messaging.ServiceBus`, `RabbitMQ.Client` or `Confluent.Kafka`; MassTransit on top |
+| Redis | `IDistributedCache` via `AddStackExchangeRedisCache` (in-memory fallback without a `Redis` connection string); `IConnectionMultiplexer` for coordination | — |
+| Scheduling | Quartz (`Ftb/Batch/BatchRunnerHostedService`), on the active instance only | — |
+| Auth | Firebase, Criipto and Signicat sign in; the API issues its own JWT and validates it with `AddJwtBearer` | — |
+| SMS, email, payments | Twilio (`FF.App/Twilio/`); email through HubSpot (`HubSpotEmailClient : IEmailSender`); Stripe.net | — |
+| Files | Azure Blob Storage (`FF.App/Services/Files/`); SFTP via SSH.NET | — |
+| Formats | `System.Text.Json` and Newtonsoft.Json, `CsvHelper` | `System.Xml.Linq`, `YamlDotNet`, `Google.Protobuf`, `Grpc.AspNetCore` |
+| OpenAPI | NSwag: `AddOpenApiDocument()`, `UseOpenApi()`, `UseSwaggerUi()` | — |
+| Scraping | none | `AngleSharp` (static HTML), `Microsoft.Playwright` (JavaScript-rendered pages) |

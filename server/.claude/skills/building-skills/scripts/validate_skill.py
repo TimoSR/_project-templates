@@ -119,7 +119,7 @@ def lint(skill_dir):
     if len(name) > NAME_MAX:
         report.error(f"name is {len(name)} chars (max {NAME_MAX})")
     if "anthropic" in name.lower() or "claude" in name.lower():
-        report.error(f"name '{name}' contains a reserved word (anthropic/claude)")
+        report.warn(f"name '{name}' contains a reserved word (anthropic/claude): fine in Claude Code, rejected on claude.ai/API upload")
     if fields.get("name") and fields["name"] != skill_dir.name:
         report.warn(f"name '{fields['name']}' differs from directory '{skill_dir.name}'")
 
@@ -175,7 +175,7 @@ def main(argv):
         return 2
     failed = False
     for arg in argv[1:]:
-        path = Path(arg)
+        path = Path(arg).resolve()
         if path.is_file() and path.name == "SKILL.md":
             path = path.parent
         report = lint(path)
