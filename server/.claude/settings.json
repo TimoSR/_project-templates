@@ -8,6 +8,22 @@
       "Bash(git log:*)",
       "Bash(git show:*)",
       "Bash(python .claude/skills/building-skills/scripts/validate_skill.py:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/.env)",
+      "Read(./**/.env.*)",
+      "Read(./src/_config/**/*.local.json)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.pfx)",
+      "Read(./**/*.key)",
+      "Read(./**/id_rsa)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Edit(./**/.env)",
+      "Edit(./**/.env.*)",
+      "Edit(./src/_config/**/*.local.json)"
     ]
   },
   "hooks": {

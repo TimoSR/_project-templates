@@ -1,3 +1,9 @@
+---
+paths:
+  - "src/**"
+  - "_tools/**"
+  - "**/*.{cs,csproj,sln,sql,py,mjs,js,ts,ps1,sh}"
+---
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
 ## 1. Think Before Coding

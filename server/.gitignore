@@ -7,3 +7,7 @@ src/_config/**/*.local.json
 
 # Generated on each run of claude-dashboard.cmd
 _tools/scripts/claude_dashboard.html
+
+# Python bytecode from .claude/skills/*/scripts/
+__pycache__/
+*.pyc

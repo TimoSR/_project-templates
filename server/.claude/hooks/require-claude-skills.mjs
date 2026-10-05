@@ -1,6 +1,7 @@
 // PreToolUse hook: denies a write to the project's Claude config (.claude/, CLAUDE.md, AGENTS.md)
 // until this session has invoked the skills that govern that file (.claude/rules/claude-config.md "Skills per file").
-// Reads the session transcript to see which skills were invoked. Fails open on unreadable input.
+// Reads the session transcript to see which skills were invoked.
+// Fails open on unreadable input, and says so (systemMessage + stderr) instead of staying silent.
 
 import * as fs from 'node:fs';
 
@@ -57,6 +58,14 @@ function wasSkillInvoked(transcript, skillName) {
     return transcript.includes('<command-name>/' + skillName + '</command-name>');
 }
 
+function failOpen(what) {
+    // The hook cannot tell whether skills were invoked, so the write is allowed.
+    // Say so: a silent fail-open means enforcement stops without anyone noticing.
+    const message = 'require-claude-skills hook failed open (' + what + '): the Claude-config skill requirement was NOT checked.';
+    process.stderr.write(message + '\n');
+    process.stdout.write(JSON.stringify({ systemMessage: message }));
+}
+
 function deny(target, missingSkills) {
     const reason = 'Writing ' + target + ' requires these skills first (.claude/rules/claude-config.md "Skills per file"). '
         + 'Invoke each with the Skill tool, follow them, then retry: ' + missingSkills.join(', ');
@@ -75,6 +84,7 @@ function main() {
     try {
         input = JSON.parse(fs.readFileSync(0, 'utf8'));
     } catch {
+        failOpen('hook input could not be parsed');
         return;
     }
 
@@ -105,6 +115,7 @@ function main() {
     try {
         transcript = fs.readFileSync(input.transcript_path, 'utf8');
     } catch {
+        failOpen('transcript could not be read');
         return;
     }
 
