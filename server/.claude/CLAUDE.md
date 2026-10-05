@@ -4,37 +4,15 @@ A C# server architecture template. It is **opt-out**: new projects copy it and d
 
 - The config files in `src/_config/` are tracked, empty placeholders. Secrets never go in them; they come from a secret store or git-ignored local config (see `rules/security.md`).
 
-## Claude Code knowledge (always loaded)
-
-@skills/claude-best-practices/SKILL.md
-@skills/claude-core-concepts/SKILL.md
-@skills/building-skills/SKILL.md
-
-## IMPORTANT: Value per token, not fewer tokens
-
-Judge context by the **value each token carries**, never by the token count. Every "cut" in these files (High-Quality Tokens below, the skills above) means "cut what carries no value". It never means "cut to save tokens".
-
-* Test for every line: does it give the reader something they need and can't derive themselves (a rule, a reason, a fact, an example)?
-   * Yes → it stays, however long it is and however often it loads.
-   * No → it goes, however short it is.
-* Context that is missing or wrong is worse than extra tokens: Claude then guesses.
-* Never propose removing or shrinking valuable content because of its size or load cost.
-
-| Content | Value | Decision |
-|---|---|---|
-| Approach / Data / Building Blocks sections that shape every design | high | keep |
-| An always-loaded skill that applies in every session | high | keep |
-| A concrete example that makes a rule unambiguous | high | keep, even if long |
-| Preamble, filler, a sentence that repeats the one above | none | cut |
-| A rule whose `paths:` match no file here (`API/FF-API/**` vs `src/features/**`) | none: it never loads | fix the paths |
-| A link to a missing file (`skills/security/guide.md`, only `SKILL.md` exists) | negative: misleads | fix the link |
-| Config written for another repo (`dotnet test API/FF-API/...`, `yarn` in `Web/`) | negative: misleads | match this repo |
-| Copies of a rule that disagree (CLAUDE.md vs `rules/code-style.md` vs `c-like-coding-style`) | negative: Claude has to pick one | make them consistent |
+<!-- Copying this template? Once the .sln exists, add a "## Commands" section here
+     (build: dotnet build, test: dotnet test, format: dotnet format) and delete this comment.
+     Block comments like this one are stripped before Claude sees the file. -->
 
 ## IMPORTANT: High-Quality Tokens / High-Quality Density
 
 Write only tokens that carry value for the reader or for future generations. A dense 5-page report beats the same content spread over 30 pages.
 
+* "Cut" means cut what carries no value, never cut to save tokens: a line the reader needs stays, however long.
 * Bullets are the default form.
 * Every concept gets a concrete, visual example: a tree, flow, table, before → after, code, or a Mermaid diagram (for loops, sequences and states, where it renders). The standard forms are in `.claude/skills/high-quality-tokens/examples.md`.
 * Cut preamble, repetition, filler, decoration and closing offers.
@@ -74,7 +52,7 @@ src/
 _tools/                                               docker, scripts, sql, terraform
 ```
 
-Config follows `config_guidelines.md`: defaults first, override per case.
+Config follows `src/_config/config_guidelines.md`: defaults first, override per case.
 
 `a-feature` and `b-feature` are blank templates to copy. `billing-feature-example` shows a real split: invoicing, payment and subscription modules.
 
@@ -96,13 +74,15 @@ Invoke the matching skill before writing code there.
 | `api/`, `_dto/` | `api-design`, `security` |
 | `infrastructure/`, `_tools/sql` | `database-design` |
 | `integration/` | `system-integration` |
-| `test/`, or reproducing a bug | `tests-as-documentation`, `debug-exception` |
+| `test/`, or reproducing a bug | `tests-as-documentation` |
 | Splitting a feature, `_contracts/` | `microservices-patterns` |
 | `domain/`, `application/`, once the simple version works | `solid-principles`, `design-patterns` |
 | Any code | `c-like-coding-style`, `logging` |
 | Formulas, money, rates, units | `codemath` |
 | Slow or large code | `low-level-optimizations` |
-| Docs, CLAUDE.md, skills, memory | `high-quality-tokens`, `building-skills` |
+| Docs, READMEs, PR descriptions | `high-quality-tokens` |
+| Non-trivial or unattended changes | `claude-best-practices` |
+| Claude setup: `.claude/`, CLAUDE.md, AGENTS.md, auto memory | `claude-core-concepts`, `claude-memory`; per-file map in `rules/claude-config.md` (loads when you open one of those files) |
 
 ## Approach
 
@@ -131,122 +111,7 @@ Invoke the matching skill before writing code there.
 
 ## Code Style
 
-We don't follow idiomatic standards. No matter the language, We write in a C-like syntax and use explicit namespaces in my API calls. The reference example below shows what that means in practice:
-
-* **Explicit namespaces.** Import each library as a whole namespace, aliased to the library's name in lowercase (`import * as vue from 'vue'`, `import * as threejs from 'three'`). Every call and type goes through it: `vue.ref`, `vue.onMounted`, `threejs.Scene`, `threejs.WebGLRendererParameters`. No named imports like `import { ref } from 'vue'`. Language globals (`Math`, `window`, `ResizeObserver`) and framework macros (`defineProps`, `withDefaults`) stay bare.
-   * In C#: don't bring library names into scope with `using X;`. Call through the namespace, and alias long ones (`using io = System.IO;`, then `io.File.ReadAllText(path)`).
-* **Config at the top.** Every tunable value lives in a named config object, grouped by what it configures (`cameraConfig`, `rendererConfig`, `animationConfig`). Logic reads from config, with no magic numbers inline. Use the library's type for a config when it has one. Inputs get defaults that callers can override (`withDefaults`).
-* **Units.** Put the unit in the name or a comment (`deltaSeconds`, `rotationSpeed: 0.6, // radians per second`). Scale by measured time (`clock.getDelta()`), not per-frame constants.
-* **Full names.** No abbreviations, even where the library abbreviates (`fieldOfView`, not `fov`). Functions are verb + noun (`resizeScene`, `destroyScene`).
-* **Linear flow.** One file, read top to bottom: imports, inputs, config, state, setup in dependency order, loop, teardown. Use local functions (`const resizeScene = () => { ... }`), not classes or extra modules.
-* **Guard clauses.** Check for failure first and return immediately: `if (!element) return`, `if (width === 0 || height === 0) return`.
-* **Explicit lifetimes.** Everything that's created gets released, in a teardown written in the same scope as the setup, like `init`/`free` pairs in C. `destroyScene` stops the loop, disconnects the observer, disposes the geometry, material and renderer, and removes the DOM node.
-* **`const` by default.** Use `let` only for values that get reassigned (`destroyScene`). Annotate types at boundaries (props, refs, config, handles) and let locals infer.
-* **Formatting (TS/Vue).** No semicolons, single quotes, trailing commas, 2-space indent, one argument per line when a call wraps.
-
-### Reference example
-
-```vue
-<!-- components/Scene.vue -->
-<script setup lang="ts">
-import * as vue from 'vue'
-import * as threejs from 'three'
-
-const props = withDefaults(defineProps<{ height?: string }>(), {
-  height: '400px',
-})
-
-const cameraConfig = {
-  fieldOfView: 75,
-  nearPlane: 0.1,
-  farPlane: 100,
-  distance: 3,
-}
-
-const rendererConfig: threejs.WebGLRendererParameters = {
-  antialias: true,
-}
-
-const animationConfig = {
-  rotationSpeed: 0.6, // radians per second
-  maxPixelRatio: 2,
-}
-
-const container = vue.ref<HTMLDivElement>()
-let destroyScene: (() => void) | undefined
-
-vue.onMounted(() => {
-  const element = container.value
-  if (!element) return
-
-  const scene = new threejs.Scene()
-
-  const camera = new threejs.PerspectiveCamera(
-    cameraConfig.fieldOfView,
-    1,
-    cameraConfig.nearPlane,
-    cameraConfig.farPlane,
-  )
-  camera.position.z = cameraConfig.distance
-
-  const renderer = new threejs.WebGLRenderer(rendererConfig)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, animationConfig.maxPixelRatio))
-  element.appendChild(renderer.domElement)
-
-  const geometry = new threejs.BoxGeometry()
-  const material = new threejs.MeshNormalMaterial()
-  const cube = new threejs.Mesh(geometry, material)
-  scene.add(cube)
-
-  const resizeScene = () => {
-    const width = element.clientWidth
-    const height = element.clientHeight
-    if (width === 0 || height === 0) return
-
-    camera.aspect = width / height
-    camera.updateProjectionMatrix()
-    renderer.setSize(width, height)
-  }
-
-  const resizeObserver = new ResizeObserver(resizeScene)
-  resizeObserver.observe(element)
-  resizeScene()
-
-  const clock = new threejs.Clock()
-
-  renderer.setAnimationLoop(() => {
-    const deltaSeconds = clock.getDelta()
-    cube.rotation.x += animationConfig.rotationSpeed * deltaSeconds
-    cube.rotation.y += animationConfig.rotationSpeed * deltaSeconds
-    renderer.render(scene, camera)
-  })
-
-  destroyScene = () => {
-    renderer.setAnimationLoop(null)
-    resizeObserver.disconnect()
-    geometry.dispose()
-    material.dispose()
-    renderer.dispose()
-    renderer.domElement.remove()
-  }
-})
-
-vue.onBeforeUnmount(() => {
-  destroyScene?.()
-})
-</script>
-
-<template>
-  <div ref="container" class="scene" :style="{ height: props.height }" />
-</template>
-
-<style scoped>
-.scene {
-  width: 100%;
-  overflow: hidden;
-}
-</style>
-```
+C-like in every language, not idiomatic: guard clauses, plain loops instead of lambda chains, braces and explicit returns, full names, config at the top, explicit namespaces (`using io = System.IO;` → `io.File.ReadAllText(path)`). Invoke `c-like-coding-style` before writing any code: the full rules and the reference example live there. `rules/code-style.md` is the short form that loads with code files.
 
 ## Data
 

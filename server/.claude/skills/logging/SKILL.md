@@ -1,16 +1,16 @@
 ---
 name: logging
-description: Applies the FlexFunding logging standard for the .NET API (Serilog to console, file and Application Insights) - picking the level (Verbose, Debug, Information, Warning, Error, Fatal), deciding what an entry must carry, and writing message templates with named placeholders ("Loan {LoanId} repaid", loanId) instead of string interpolation ($"..."), so values stay queryable properties, the template stays constant, and the generic overloads skip boxing and formatting when the level is off. Use when adding, changing or reviewing any _logger (Serilog or Microsoft.Extensions.Logging) / Serilog.Log / ForContext call, a catch block, a retry, a webhook or background job, or when the user mentions logging, log levels, tracing, structured logging, message templates, Application Insights queries, log noise, or boxing and allocations in logs. Not for which fields are sensitive or how to protect them (security).
+description: Applies the house logging standard for a .NET API (Serilog or Microsoft.Extensions.Logging, to console, file and a structured sink such as Application Insights) - picking the level (Verbose, Debug, Information, Warning, Error, Fatal), deciding what an entry must carry, and writing message templates with named placeholders ("Loan {LoanId} repaid", loanId) instead of string interpolation ($"..."), so values stay queryable properties, the template stays constant, and the generic overloads skip boxing and formatting when the level is off. Use when adding, changing or reviewing any _logger (Serilog or Microsoft.Extensions.Logging) / Serilog.Log / ForContext call, a catch block, a retry, a webhook or background job, or when the user mentions logging, log levels, tracing, structured logging, message templates, Application Insights queries, log noise, or boxing and allocations in logs. Not for which fields are sensitive or how to protect them (security).
 ---
 
 # Logging
 
-A log entry is a query row, not a sentence. Every rule holds for the whole task. The codebase uses two loggers, both writing to Serilog: `Serilog.ILogger` via `Serilog.Log.ForContext<T>()` (`_logger.Warning(...)`), and injected `Microsoft.Extensions.Logging.ILogger<T>` (MEL, `_logger.LogWarning(...)`). Match the logger the class already has; the template rules are the same for both, the cost rules differ (§1). Minimum level `Information`, `Microsoft`/`System` at `Warning` (`FF.Api/appsettings.json`), `Enrich.FromLogContext()` on (`FF.Api/Program.cs`).
+A log entry is a query row, not a sentence. Every rule holds for the whole task. Two loggers are in use, both writing to Serilog: `Serilog.ILogger` via `Serilog.Log.ForContext<T>()` (`_logger.Warning(...)`), and injected `Microsoft.Extensions.Logging.ILogger<T>` (MEL, `_logger.LogWarning(...)`). Match the logger the class already has; the template rules are the same for both, the cost rules differ (§1). Default config: minimum level `Information`, `Microsoft`/`System` at `Warning` (appsettings in `src/_config/`), `Enrich.FromLogContext()` on (`src/program.cs`).
 
 ## 1. Message templates, never interpolation
 
 ```csharp
-// ✗ interpolation - real code, FF.App/Accounts/Services/AccountUpdaterService.cs
+// ✗ interpolation
 _logger.Warning($"Negative balance for: {_accountNumber}. Balance={_balance}, Change={balanceDelta}");
 
 // ✓ template + arguments
@@ -50,13 +50,13 @@ _logger.Warning(
 
 Ask: *who must act, and how fast?*
 
-| Level | Meaning | Who acts | FlexFunding example |
+| Level | Meaning | Who acts | Example |
 |---|---|---|---|
 | `Verbose` | Step-by-step trace inside an algorithm | nobody - local debugging only | each installment in a repayment schedule calculation |
 | `Debug` | Internal decision useful when diagnosing | developer, on demand (off in prod) | "Chose payout route {Route} for {LoanId}" |
 | `Information` | A business event happened - one per meaningful state change | nobody; it's the audit/flow trail | "Loan {LoanId} disbursed {Amount}", webhook received, job started/finished with counts |
 | `Warning` | Unexpected but handled; system continues correctly | someone, eventually, if it repeats | retry attempt, duplicate webhook ignored, negative balance allowed by config, fallback used |
-| `Error` | An operation failed; a user or process did not get its result | someone, today | payout to AIIA failed, HubSpot sync threw, invalid webhook signature |
+| `Error` | An operation failed; a user or process did not get its result | someone, today | payout to the bank failed, HubSpot sync threw, invalid webhook signature |
 | `Fatal` | The process cannot continue | someone, now | startup config missing, DB unreachable at boot |
 
 * **Not an `Error`:** validation failures and expected domain rejections (insufficient funds, KYC declined) - the system worked. `Information` if the event matters to the flow, otherwise nothing; the response already tells the caller.
@@ -72,7 +72,7 @@ Ask: *who must act, and how fast?*
   // ✗ loses stack trace and exception type
   _logger.Error("Payout failed: {Message}", exception.Message);
   // ✓
-  _logger.Error(exception, "Payout to AIIA failed for {LoanId}", loanId);
+  _logger.Error(exception, "Payout to bank failed for {LoanId}", loanId);
   ```
 * **Units in the name:** `{ElapsedMilliseconds}`, `{AmountDkk}`, not `{Elapsed}`, `{Amount}` when the unit is ambiguous.
 * **Source context:** `Serilog.Log.ForContext<T>()` per class, or the `T` of an injected `ILogger<T>`, so `SourceContext` filters by class.

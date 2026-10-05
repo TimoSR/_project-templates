@@ -8,7 +8,7 @@ paths:
 
 # Persistence
 
-The template's database is PostgreSQL (`infrastructure/postgress/`, `src/_config/infrastructure/databases/supabase.json`). Use the PostgreSQL column of the `database-design` provider map; its SQL Server column and FlexFunding notes (`FF.*` paths, startup migrator) don't apply here. Tenancy/RLS and database roles are opt-in target designs, not prerequisites for ordinary work.
+The template's database is PostgreSQL (`infrastructure/postgress/`, `src/_config/infrastructure/databases/supabase.json`). Use the PostgreSQL column of the `database-design` provider map; its SQL Server column doesn't apply here. Tenancy/RLS and database roles are opt-in target designs, not prerequisites for ordinary work.
 
 - Each module owns its stores in `infrastructure/postgress/<store>/` and `infrastructure/cache/<cache>/`. Other modules reach that data through the feature's `_contracts/`, never through the DbContext or tables.
 - Business rules live in `domain/` and `application/`. Database constraints enforce integrity. No business procedures or hidden side-effect triggers; a documented purely technical timestamp trigger is allowed.

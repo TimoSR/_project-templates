@@ -120,5 +120,5 @@ Worth it now?      yes: the queue migration is planned
 ## In this repo
 
 * **No exceptions in the domain** (`.claude/CLAUDE.md`). An LSP precondition becomes DTO-boundary validation or a factory that returns null: `Weight.Create(kilograms) → Weight?`, not a throwing constructor. The guard-clause, exception-hierarchy and `NotSupportedException` advice in [lsp-contracts-and-variance.md](references/lsp-contracts-and-variance.md) applies to infrastructure and adapters only.
-* **Composition root:** `FF.Api/Startup.cs`. Elsewhere, wherever the program starts: `Program.cs`/`main`, an app factory, framework startup.
-* **Contract folders** (here `API/FF-API/_CONTRACTS/`) are the interface side of the Stairway. Interfaces go there; implementations stay in their feature or module.
+* **Composition root:** `src/program.cs`, which calls each feature's `<feature>-serviceServiceExtensions.cs`; that file calls its modules' extensions. Elsewhere, wherever the program starts: `Program.cs`/`main`, an app factory, framework startup.
+* **Contract folders** (here `src/_contracts/` and `src/features/<feature>/_contracts/`) are the interface side of the Stairway. Interfaces go there; implementations stay in their feature or module.

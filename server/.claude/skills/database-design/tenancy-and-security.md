@@ -160,7 +160,7 @@ ALTER ROLE app_user ADD MEMBER [api-managed-identity];
 
 ## 5. Testing isolation
 
-RLS is a money-and-privacy rule: cover it with an infrastructure test per `tests-as-documentation` (Testcontainers SQL Server, never SQLite, which has no RLS).
+RLS is a money-and-privacy rule: cover it with an infrastructure test per `tests-as-documentation` (Testcontainers with the real provider, never SQLite, which has no RLS).
 
 ```
 Arrange  as the migrator: insert an order for tenant A and one for tenant B

@@ -9,7 +9,19 @@ Code reads like C written by a C# developer: explicit, imperative, top to bottom
 
 ## Rules for every language
 
-`.claude/CLAUDE.md` § Code Style already defines these, with examples; apply them in every language, not only TS/Vue: guard clauses (fail first, return early, no nesting), full verb + noun names, config at the top with no magic numbers, units in names, explicit namespaces, types at boundaries with inferred locals, every create paired with its release in the same scope, one linear file. This skill adds:
+The [reference example](#reference-example) at the end shows each of these in one file.
+
+* **Explicit namespaces.** Import each library as a whole namespace, aliased to the library's name in lowercase (`import * as vue from 'vue'`, `import * as threejs from 'three'`). Every call and type goes through it: `vue.ref`, `vue.onMounted`, `threejs.Scene`, `threejs.WebGLRendererParameters`. No named imports like `import { ref } from 'vue'`. Language globals (`Math`, `window`, `ResizeObserver`) and framework macros (`defineProps`, `withDefaults`) stay bare.
+   * In C#: don't bring library names into scope with `using X;`. Call through the namespace, and alias long ones (`using io = System.IO;`, then `io.File.ReadAllText(path)`).
+* **Config at the top.** Every tunable value lives in a named config object, grouped by what it configures (`cameraConfig`, `rendererConfig`, `animationConfig`). Logic reads from config, with no magic numbers inline. Use the library's type for a config when it has one. Inputs get defaults that callers can override (`withDefaults`).
+* **Units.** Put the unit in the name or a comment (`deltaSeconds`, `rotationSpeed: 0.6, // radians per second`). Scale by measured time (`clock.getDelta()`), not per-frame constants.
+* **Full names.** No abbreviations, even where the library abbreviates (`fieldOfView`, not `fov`). Functions are verb + noun (`resizeScene`, `destroyScene`).
+* **Linear flow.** One file, read top to bottom: imports, inputs, config, state, setup in dependency order, loop, teardown. No extra classes or modules for single-use logic; the only class is the feature's namespace (a static class in C#, a unit struct in Rust, table below). TS/Vue local helpers: § TypeScript.
+* **Guard clauses.** Check for failure first and return immediately: `if (!element) return`, `if (width === 0 || height === 0) return`.
+* **Explicit lifetimes.** Everything that's created gets released, in a teardown written in the same scope as the setup, like `init`/`free` pairs in C. `destroyScene` stops the loop, disconnects the observer, disposes the geometry, material and renderer, and removes the DOM node.
+* **Types at boundaries.** Annotate props, refs, config and handles; let locals infer. TS/JS: `const` by default, `let` only for values that get reassigned (`destroyScene`).
+
+On top of those:
 
 | Rule | ✗ | ✓ |
 |---|---|---|
@@ -101,8 +113,114 @@ function roundGrade(grade: number): number {
 
 ## TypeScript / JavaScript / Vue
 
-`.claude/CLAUDE.md`'s reference example sets three exceptions to the rules above:
+* Formatting: no semicolons, single quotes, trailing commas, 2-space indent, one argument per line when a call wraps.
+
+The reference example below sets three exceptions to the rules above:
 
 * Local helpers inside a setup scope are arrow-function constants: `const resizeScene = () => { … }`. They may read that scope's handles (`camera`, `renderer`, `element`) instead of taking them as parameters.
 * A guard clause that is one statement stays unbraced: `if (!element) return`. Any other `if` body gets braces.
 * The teardown handle is the one stored closure: `let destroyScene: (() => void) | undefined`, assigned at the end of setup and called in `vue.onBeforeUnmount`.
+
+### Reference example
+
+```vue
+<!-- components/Scene.vue -->
+<script setup lang="ts">
+import * as vue from 'vue'
+import * as threejs from 'three'
+
+const props = withDefaults(defineProps<{ height?: string }>(), {
+  height: '400px',
+})
+
+const cameraConfig = {
+  fieldOfView: 75,
+  nearPlane: 0.1,
+  farPlane: 100,
+  distance: 3,
+}
+
+const rendererConfig: threejs.WebGLRendererParameters = {
+  antialias: true,
+}
+
+const animationConfig = {
+  rotationSpeed: 0.6, // radians per second
+  maxPixelRatio: 2,
+}
+
+const container = vue.ref<HTMLDivElement>()
+let destroyScene: (() => void) | undefined
+
+vue.onMounted(() => {
+  const element = container.value
+  if (!element) return
+
+  const scene = new threejs.Scene()
+
+  const camera = new threejs.PerspectiveCamera(
+    cameraConfig.fieldOfView,
+    1,
+    cameraConfig.nearPlane,
+    cameraConfig.farPlane,
+  )
+  camera.position.z = cameraConfig.distance
+
+  const renderer = new threejs.WebGLRenderer(rendererConfig)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, animationConfig.maxPixelRatio))
+  element.appendChild(renderer.domElement)
+
+  const geometry = new threejs.BoxGeometry()
+  const material = new threejs.MeshNormalMaterial()
+  const cube = new threejs.Mesh(geometry, material)
+  scene.add(cube)
+
+  const resizeScene = () => {
+    const width = element.clientWidth
+    const height = element.clientHeight
+    if (width === 0 || height === 0) return
+
+    camera.aspect = width / height
+    camera.updateProjectionMatrix()
+    renderer.setSize(width, height)
+  }
+
+  const resizeObserver = new ResizeObserver(resizeScene)
+  resizeObserver.observe(element)
+  resizeScene()
+
+  const clock = new threejs.Clock()
+
+  renderer.setAnimationLoop(() => {
+    const deltaSeconds = clock.getDelta()
+    cube.rotation.x += animationConfig.rotationSpeed * deltaSeconds
+    cube.rotation.y += animationConfig.rotationSpeed * deltaSeconds
+    renderer.render(scene, camera)
+  })
+
+  destroyScene = () => {
+    renderer.setAnimationLoop(null)
+    resizeObserver.disconnect()
+    geometry.dispose()
+    material.dispose()
+    renderer.dispose()
+    renderer.domElement.remove()
+  }
+})
+
+vue.onBeforeUnmount(() => {
+  destroyScene?.()
+})
+</script>
+
+<template>
+  <div ref="container" class="scene" :style="{ height: props.height }" />
+</template>
+
+<style scoped>
+.scene {
+  width: 100%;
+  overflow: hidden;
+}
+</style>
+```

@@ -1,0 +1,9 @@
+# Personal Claude Code config (team config stays tracked in .claude/)
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Local config overrides and secrets: src/_config/ holds tracked placeholders only (CLAUDE.md, rules/security.md)
+src/_config/**/*.local.json
+
+# Generated on each run of claude-dashboard.cmd
+_tools/scripts/claude_dashboard.html

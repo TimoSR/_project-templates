@@ -10,7 +10,7 @@
 7. Long-running operations
 8. Compatibility and deprecation
 9. Hypermedia: HATEOAS and HAL
-10. The OpenAPI contract (NSwag)
+10. The OpenAPI contract
 11. Sources
 
 ---
@@ -21,11 +21,11 @@ Google AIP-130 to 135, mapped to HTTP. Five methods cover most of an API. Each n
 
 | Method | HTTP | Request | Response | Notes |
 |---|---|---|---|---|
-| List (AIP-132) | `GET /{parent}/loans` | `pageSize`, `pageToken`, filters, `sort` | `{ items, nextPageToken }` | summary view; never unbounded |
-| Get (AIP-131) | `GET /loans/{loanNumber}` | — | the resource | detail view |
-| Create (AIP-133) | `POST /{parent}/loans` | the resource without server fields | `201` + `Location` + resource | server generates the id unless the business key comes from the client |
-| Update (AIP-134) | `PATCH /loans/{loanNumber}` | the fields to change | the full resource | Google uses an `update_mask`; we use "absent = unchanged" |
-| Delete (AIP-135) | `DELETE /loans/{loanNumber}` | — | `204` | soft delete (AIP-164): `200` + the resource with `deletedAtUtc` set |
+| List (AIP-132) | `GET /{parent}/invoices` | `pageSize`, `pageToken`, filters, `sort` | `{ items, nextPageToken }` | summary view; never unbounded |
+| Get (AIP-131) | `GET /invoices/{invoiceNumber}` | — | the resource | detail view |
+| Create (AIP-133) | `POST /{parent}/invoices` | the resource without server fields | `201` + `Location` + resource | server generates the id unless the business key comes from the client |
+| Update (AIP-134) | `PATCH /invoices/{invoiceNumber}` | the fields to change | the full resource | Google uses an `update_mask`; we use "absent = unchanged" |
+| Delete (AIP-135) | `DELETE /invoices/{invoiceNumber}` | — | `204` | soft delete (AIP-164): `200` + the resource with `deletedAtUtc` set |
 
 * Read-only fields (`id`, `createdAtUtc`, `status` set by the domain) are ignored or rejected on input. Never trust them from the client.
 * A resource uses one schema for reading and writing where possible (Zalando #252). Mark server-only fields `readOnly` in OpenAPI.
@@ -36,22 +36,22 @@ Google AIP-130 to 135, mapped to HTTP. Five methods cover most of an API. Each n
 For operations that don't fit the five methods (AIP-136). Always `POST` (or `GET` if the operation is safe), on the resource or the collection:
 
 ```
-POST /loans/{loanNumber}/cancel        an action with its own rules and side effects
-POST /loans/{loanNumber}/payouts       ✓ better when the action leaves a record: model it as a sub-resource
-POST /loans/search                     a filter too complex or too long for the query string
+POST /invoices/{invoiceNumber}/cancel     an action with its own rules and side effects
+POST /invoices/{invoiceNumber}/payments   ✓ better when the action leaves a record: model it as a sub-resource
+POST /invoices/search                     a filter too complex or too long for the query string
 ```
 
 * Decision order:
    1. A field the client may edit freely → `PATCH` the field.
    2. The action creates something that has its own life (a payout, a lock, a transfer) → a sub-resource you `POST` to.
-   3. A status transition, or any other action on one resource → `POST /{id}/{verb}`: `POST /factorings/{loanNumber}/fund`. The status field itself stays read-only (AIP-216).
-   4. An action on the whole collection → `POST /{collection}/{verb}`: `POST /factorings/copy-legacy`.
-* Google writes `:cancel`. We use `/cancel`: in ASP.NET route templates `:` introduces a constraint (`{id:int}`), and proxies and NSwag treat `/` segments uniformly.
+   3. A status transition, or any other action on one resource → `POST /{id}/{verb}`: `POST /invoices/{invoiceNumber}/issue`. The status field itself stays read-only (AIP-216).
+   4. An action on the whole collection → `POST /{collection}/{verb}`: `POST /invoices/copy-legacy`.
+* Google writes `:cancel`. We use `/cancel`: in ASP.NET route templates `:` introduces a constraint (`{id:int}`), and proxies and OpenAPI generators treat `/` segments uniformly.
 * Batch operations return `207 Multi-Status` with one result per item (Zalando #152). Avoid them until a client needs them.
 
 ## 3. Errors: ProblemDetails setup
 
-`Startup.cs` doesn't register `AddProblemDetails()` yet. Without it, unhandled exceptions and status-only responses outside `[ApiController]` return an empty body. When touching error handling, register it:
+Register `AddProblemDetails()` in `src/program.cs`. Without it, unhandled exceptions and status-only responses outside `[ApiController]` return an empty body:
 
 ```csharp
 services.AddProblemDetails();     // IProblemDetailsService for exceptions and status codes
@@ -71,7 +71,7 @@ return Problem(
     statusCode: 409,
     type: "/problems/illegal-status-transition",
     title: "Status change not allowed",
-    detail: $"Factoring {loanNumber} cannot go from {current} to {requested}.");
+    detail: $"Invoice {invoiceNumber} cannot go from {current} to {requested}.");
 ```
 
 * Keep the `type` values in one config or constants class, so the list of problem kinds is visible and documented in OpenAPI.
@@ -82,9 +82,9 @@ return Problem(
 | Need | Form | Default |
 |---|---|---|
 | Filter | one query parameter per field: `?status=Funded&createdAfterUtc=2026-01-01T00:00:00Z` | yes |
-| Sort | `?sort=-createdAtUtc,loanNumber` (`-` = descending) | only the indexed columns; the server rejects others with `400` |
+| Sort | `?sort=-createdAtUtc,invoiceNumber` (`-` = descending) | only the indexed columns; the server rejects others with `400` |
 | Free-text search | `?q=acme` | when a screen has a search box |
-| Partial response | `?fields=loanNumber,status` | no: build two views (summary and detail) first |
+| Partial response | `?fields=invoiceNumber,status` | no: build two views (summary and detail) first |
 | Embed related resources | `?expand=borrower` → `"borrower": { ... }` inline | no: only when measured round trips hurt |
 
 * Unknown query parameters are ignored (tolerant reader), but a known parameter with a bad value is `400`.
@@ -95,9 +95,9 @@ return Problem(
 Prevents lost updates when two users edit the same resource:
 
 ```
-GET   /factorings/10432            → 200   ETag: "AAAAAAAAB9E="
-PATCH /factorings/10432            If-Match: "AAAAAAAAB9E="   → 200   ETag: "AAAAAAAAB9I="
-PATCH /factorings/10432            If-Match: "AAAAAAAAB9E="   → 412   someone changed it in between
+GET   /invoices/10432            → 200   ETag: "AAAAAAAAB9E="
+PATCH /invoices/10432            If-Match: "AAAAAAAAB9E="   → 200   ETag: "AAAAAAAAB9I="
+PATCH /invoices/10432            If-Match: "AAAAAAAAB9E="   → 412   someone changed it in between
 ```
 
 * ETag = the EF Core `rowversion` column (`[System.ComponentModel.DataAnnotations.Timestamp]`), base64-encoded. EF raises `DbUpdateConcurrencyException`, which the controller maps to `412`.
@@ -106,10 +106,10 @@ PATCH /factorings/10432            If-Match: "AAAAAAAAB9E="   → 412   someone 
 
 ## 6. Idempotency keys
 
-A network timeout on `POST /payouts` leaves the client unsure whether the payout was made. A retry must not pay twice.
+A network timeout on `POST /payments` leaves the client unsure whether the payment was made. A retry must not charge twice.
 
 ```
-POST /loans/10432/payouts
+POST /invoices/10432/payments
 Idempotency-Key: 6f1c2a9e-4b7d-4e0a-9c55-2d8f3e1b7a40
 { "amount": 50000.00, "currency": "DKK" }
 ```
@@ -146,12 +146,12 @@ GET  /tax-reports/7f3a       → { "id": "7f3a", "status": "Failed", "problem": 
 * Specification version in OpenAPI `info.version` uses semantic versioning (Zalando #116): MAJOR for breaking, MINOR for added endpoints or fields, PATCH for doc fixes. Only MAJOR appears in a URL.
 * Retiring a route, in order:
    1. Ship the new route. Both work.
-   2. Mark the old action `[System.Obsolete("Use GET /external-api/loans")]` (NSwag marks it `deprecated: true`) and send the headers:
+   2. Mark the old action `[System.Obsolete("Use GET /api/invoices")]` (the OpenAPI spec marks it `deprecated: true`) and send the headers:
 
 ```
 Deprecation: @1767225600                          (RFC 9745: deprecated since this Unix time)
 Sunset: Thu, 01 Jul 2027 00:00:00 GMT             (RFC 8594: stops working after)
-Link: </external-api/loans>; rel="successor-version"
+Link: </api/invoices>; rel="successor-version"
 ```
 
    3. Tell partners and watch request logs for the old route.
@@ -165,12 +165,12 @@ HATEOAS: the response tells the client what it can do next, as links, so the cli
 
 ```json
 {
-  "loanNumber": "10432",
+  "invoiceNumber": "10432",
   "status": "Pending",
   "_links": {
-    "self":     { "href": "https://api.flexfunding.com/external-api/loans/10432" },
-    "payments": { "href": "https://api.flexfunding.com/external-api/loans/10432/payments" },
-    "cancel":   { "href": "https://api.flexfunding.com/external-api/loans/10432/cancel" }
+    "self":     { "href": "https://api.example.com/api/invoices/10432" },
+    "payments": { "href": "https://api.example.com/api/invoices/10432/payments" },
+    "cancel":   { "href": "https://api.example.com/api/invoices/10432/cancel" }
   }
 }
 ```
@@ -181,10 +181,10 @@ HATEOAS: the response tells the client what it can do next, as links, so the cli
 * If used: absolute URIs, links in the JSON body, never in `Link` headers (Zalando #166, #217); standard relation names `self`, `next`, `prev`, `first`, `last`.
 * Alternatives with richer controls (JSON-LD, Siren) only if a consumer requires them.
 
-## 10. The OpenAPI contract (NSwag)
+## 10. The OpenAPI contract
 
-* This repo generates the spec with NSwag: `services.AddOpenApiDocument(...)` in `FF.Api/Startup.cs` publishes the `"external"` group, served through Swagger UI and ReDoc (`/redoc`). A snapshot is committed at `FF.Api/Controllers/ExternalApi/api.spec.json`.
-* An action appears in the external spec only with `[ApiExplorerSettings(GroupName = "external")]` on the controller.
+* Use one generator (ASP.NET Core's built-in `AddOpenApi()`, NSwag or Swashbuckle) and commit a snapshot of the published spec, so a diff shows every contract change.
+* Keep published routes in their own document or group (`[ApiExplorerSettings(GroupName = "public")]`), so internal endpoints stay out of the partners' spec.
 * The spec is only as good as the attributes:
 
 | Attribute | Publishes |
@@ -193,7 +193,7 @@ HATEOAS: the response tells the client what it can do next, as links, so the cli
 | `[Required]` and `required` on DTO properties | required vs optional fields |
 | `/// <summary>` XML comments | operation and field descriptions |
 | `[System.Obsolete]` | `deprecated: true` |
-| `ExternalApiSwaggerExamplesOperationProcessor` (`FF.Api/Infrastructure/`) | request/response examples |
+| the generator's operation processor / filter / transformer | request/response examples |
 
 * Review the generated spec, not just the code. A route without its error codes in the spec isn't finished.
 

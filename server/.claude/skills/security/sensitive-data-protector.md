@@ -1,6 +1,6 @@
 # Sensitive Data Protector
 
-The single place where sensitive values are hashed, lookup-hashed, encrypted and decrypted. Build it once in `API/FTB/Ftb/Services/Encryption/`. Every controller and adapter uses it, and nothing else touches the keys.
+The single place where sensitive values are hashed, lookup-hashed, encrypted and decrypted. Build it once in `src/_architecture/encryption/`. Every controller and adapter uses it, and nothing else touches the keys.
 
 ## Contents
 1. Normalize and mask
@@ -21,7 +21,7 @@ Normalize before hashing. Otherwise `010190-1234` and `0101901234` produce two l
 | Phone | E.164: `+4512345678` | `+45 ****5678` |
 
 * CVR numbers are public in the Danish business register, so they aren't sensitive.
-   * A field that can hold a CPR *or* a CVR (`ExternalCustomer.IdentificationNumber`) is treated as a CPR.
+   * A field that can hold a CPR *or* a CVR (a customer's `IdentificationNumber`) is treated as a CPR.
 
 ## 2. Code
 
@@ -29,7 +29,7 @@ Normalize before hashing. Otherwise `010190-1234` and `0101901234` produce two l
 using cryptography = System.Security.Cryptography;
 using text = System.Text;
 
-namespace Ftb.Services.Encryption;
+namespace Architecture.Encryption;
 
 internal static class SensitiveDataConfig
 {
@@ -213,9 +213,9 @@ public sealed class SensitiveDataProtector
 
 ## 3. Keys and rotation
 
-* Two kinds of key, each 32 random bytes stored as base64 in Key Vault and read through `IKeyValueStorage`:
+* Two kinds of key, each 32 random bytes stored as base64 in the secret store:
 
-| Key Vault secret | Used for | Rotation |
+| Secret name | Used for | Rotation |
 |---|---|---|
 | `SensitiveDataEncryptionKeyV1`, `V2`, … | AES-GCM | Add `V2` and make it current. `V1` stays so old rows still decrypt. A background job re-encrypts old rows; remove `V1` once none are left |
 | `SensitiveDataLookupKey` | HMAC lookup hash | Expensive: every lookup hash has to be recomputed from decrypted values. Rotate only if the key is compromised |
@@ -226,10 +226,10 @@ public sealed class SensitiveDataProtector
 [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 ```
 
-* `Ftb` can't reference `FF.App`, so the protector takes its keys through its constructor. `FF.Api/Startup.cs` registers it as a singleton, reading the keys from `IKeyValueStorage`:
+* The protector takes its keys through its constructor, so it doesn't depend on any feature. `src/program.cs` registers it as a singleton, reading the keys from the secret store:
    * a missing key throws, and there is no default key
    * `Program` resolves the protector once at startup, so a missing key stops the deploy instead of the first request
-* Dev keys are random per developer and live in user secrets. A tracked file (`FF.Api/KeyValueStorage.json`, `appsettings.json`) is not a secret store: anything committed is public.
+* Dev keys are random per developer and live in user secrets. A tracked file (anything under `src/_config/`) is not a secret store: anything committed is public.
 
 ## 4. Storage and use
 

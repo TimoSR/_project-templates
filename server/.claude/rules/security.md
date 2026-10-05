@@ -6,7 +6,7 @@ paths:
 
 # Backend security
 
-New code meets these standards. Preserve existing protection schemes when narrowly editing code; flag gaps and do not silently migrate stored data. Recipes: `.claude/skills/security/SKILL.md` and `sensitive-data-protector.md` (their `FF.*` paths and Ftb/Hot Chocolate traps are FlexFunding's).
+New code meets these standards. Preserve existing protection schemes when narrowly editing code; flag gaps and do not silently migrate stored data. Recipes: `.claude/skills/security/SKILL.md` and `sensitive-data-protector.md`.
 
 - Validate and bound `_dto/` request fields before `application/` runs: type, requiredness, length, range, format, enum, list count, and request cost. Parse raw values into `domain/value-objects/` types. Reject unknown REST request fields.
 - Inputs contain only caller-owned choices. Ownership, tenant, audit fields, and server-controlled transitions come from trusted context or server logic.

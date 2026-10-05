@@ -148,4 +148,4 @@ Cost / now?   4 small classes vs keeping the switch; worth it now, since 2 more 
 | Mediator + Command | In-process request/handler dispatchers (MediatR) |
 | Visitor | A `switch` statement on type over sealed hierarchies or sum types |
 
-In a codebase with contract folders (here `API/FF-API/_CONTRACTS/`), pattern interfaces (strategy, handler, product, visitor, subscriber) go there; implementations stay in their module.
+In a codebase with contract folders (here `src/_contracts/` and `src/features/<feature>/_contracts/`), pattern interfaces (strategy, handler, product, visitor, subscriber) go there; implementations stay in their module.

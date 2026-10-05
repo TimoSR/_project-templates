@@ -7,7 +7,7 @@ paths:
 
 # REST contracts
 
-Applies to REST endpoints in a module's `api/REST/` and their request/response types in `_dto/`, not GraphQL operations or event handlers. New contracts follow the standard; published routes retain compatibility. Detailed choices/examples: `.claude/skills/api-design/SKILL.md` and `reference.md` (their `external-api`, NSwag and `Web/` specifics are FlexFunding's).
+Applies to REST endpoints in a module's `api/REST/` and their request/response types in `_dto/`, not GraphQL operations or event handlers. New contracts follow the standard; published routes retain compatibility. Detailed choices/examples: `.claude/skills/api-design/SKILL.md` and `reference.md`.
 
 - Plural resource nouns, kebab-case paths, business IDs as strings, camelCase JSON/query fields. Nest only dependent resources, at most three levels.
 - GET reads; POST creates; PUT replaces; PATCH updates editable fields; DELETE removes. Status transitions use named POST actions (`POST /invoices/{invoiceNumber}/cancel`).

@@ -110,7 +110,6 @@ println!("{}", velocity.display_kilometers_per_hour_precision(2)); // 1878.91 km
 Applied to money in this repo:
 
 * Same pattern: `Money × MonthlyRate → Money` is one month's interest. With no `Money × AnnualRate`, using an annual rate as a monthly one does not compile. Converting between them is a named function that states its convention (`ToMonthlyNominal`: ÷ 12, not the effective `(1+r)^(1/12) − 1`), which is a §5 model assumption.
-* Hazard: `Ftb.ValueObjects.Percentage` stores 15 for 15 %. Formulas must read `ValueAsFraction` (0.15), never `Value`. Its implicit `decimal → Percentage` conversion lets `Percentage rate = 0.15m` compile and mean 0.15 %, so this type does not protect you.
 * TypeScript has no operator overloading. Branded parameter types (`number & { readonly unit: 'months' }`) stop swapped arguments, but arithmetic drops the brand, so money formulas belong in C#.
 * Full C# version (types, annuity, compile errors, xUnit test, all verified): [units-as-types.md](units-as-types.md).
 

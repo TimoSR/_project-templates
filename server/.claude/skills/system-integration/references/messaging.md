@@ -149,6 +149,6 @@ A queue between "submit" and "do" gives three things:
    * Eventual consistency: the CRM shows "unpaid" for a few seconds.
    * Debugging: one action spans several processes → a correlation id in every envelope + distributed tracing (OpenTelemetry).
    * Duplicates and ordering (§3), schema evolution, a broker to run, harder end-to-end tests.
-* Default for one deployable: in-process domain events and handlers (this repo: MediatR, plus the `ProcessingQueueEntry` table when work must survive a restart). A broker enters when a consumer must run in another process.
+* Default for one deployable: in-process domain events and handlers (MediatR or plain handlers, plus an outbox table when work must survive a restart). A broker enters when a consumer must run in another process.
 * Event sourcing (state rebuilt by replaying stored events) and CQRS views: `microservices-patterns`.
 * Good pub/sub fits: IoT telemetry (devices come and go), monitoring and centralized logging, replication, notifications, game matchmaking, lobbies and telemetry. Not media streaming, which needs smooth, ordered delivery (HLS/DASH, WebRTC).

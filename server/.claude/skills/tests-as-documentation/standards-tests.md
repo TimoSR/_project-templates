@@ -1,9 +1,8 @@
 # Standards tests
 
 Checks that the code follows the rules we set: interfaces, base classes, generic constraints, DI
-registration. Plain reflection over the compiled assemblies: no I/O, unit speed. Existing example:
-`FF.Tests/HubSpot/HubSpotMapperRegistrationTests.cs` (every legacy mapper is also registered
-through the shared contract).
+registration. Plain reflection over the compiled assemblies: no I/O, unit speed. They live in the `test/`
+folder of the module whose rules they guard (`payment-module/test/DunningPolicyStandardsTests.cs`).
 
 ## Domain conformance
 
@@ -12,16 +11,16 @@ and abstract classes.
 
 ```csharp
 [Fact]
-public void Every_alarm_policy_implements_IAlarmPolicy()
+public void Every_dunning_policy_implements_IDunningPolicy()
 {
     // Arrange
-    var policyTypes = typeof(FF.App.Alarms.Policies.IAlarmPolicy).Assembly.GetTypes()
-        .Where(type => type.Namespace == "FF.App.Alarms.Policies" && type.IsClass && !type.IsAbstract)
+    var policyTypes = typeof(Billing.Payment.Domain.Policies.IDunningPolicy).Assembly.GetTypes()
+        .Where(type => type.Namespace == "Billing.Payment.Domain.Policies" && type.IsClass && !type.IsAbstract)
         .ToArray();
 
     // Act
     var violations = policyTypes
-        .Where(type => !typeof(FF.App.Alarms.Policies.IAlarmPolicy).IsAssignableFrom(type))
+        .Where(type => !typeof(Billing.Payment.Domain.Policies.IDunningPolicy).IsAssignableFrom(type))
         .ToArray();
 
     // Assert
@@ -48,19 +47,19 @@ tests for both halves:
    public void PolicyBase_only_accepts_entities()
    {
        // Arrange
-       var entityParameter = typeof(FF.App.Alarms.Policies.PolicyBase<>).GetGenericArguments()[0];
+       var entityParameter = typeof(Billing.Payment.Domain.Policies.PolicyBase<>).GetGenericArguments()[0];
 
        // Act
        var constraints = entityParameter.GetGenericParameterConstraints();
 
        // Assert
-       Xunit.Assert.Contains(typeof(Ftb.Core.IEntity), constraints);
+       Xunit.Assert.Contains(typeof(Architecture.Domain.IEntity), constraints);
    }
    ```
 
 2. **The rule behaves correctly:** a type that satisfies the constraint runs through the generic
-   and gets the behavior the base class promises (e.g. a `PolicyBase<Account>` subclass resolves
-   alarms against the `Account` entity name). Use a real implementation; it doubles as the usage
+   and gets the behavior the base class promises (e.g. a `PolicyBase<Invoice>` subclass evaluates
+   its rule against the `Invoice` entity). Use a real implementation; it doubles as the usage
    example for the next developer who builds on the generic.
 
 * Name the test as the rule (`PolicyBase_only_accepts_entities`), so the test list reads as the

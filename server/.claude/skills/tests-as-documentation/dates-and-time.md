@@ -8,18 +8,17 @@ merged. **Rule: the test owns "now".** If the test can't set the time, it can't 
 
 Pick the first option that fits:
 
-| Option | When | In the repo |
+| Option | When | How |
 | --- | --- | --- |
 | `now` / `today` as a parameter | Pure calculators and rules: simplest, needs no stub | — |
-| .NET `System.TimeProvider` | New code, feature modules | `FactoringService`, `FactoringOutboxDispatcher`; production registers `TimeProvider.System` |
-| `FF.Core.Services.Time.IDateAndTimeProvider` | Monolith code that already uses it | `GetUtcNow()`, `GetToday(DatePurpose)`; stubbed in `PlaceOrderTestContext` |
+| .NET `System.TimeProvider` | Services, processors, dispatchers | injected; production registers `TimeProvider.System` once in `src/program.cs` |
 
 ```csharp
 // ✗ the test can't choose the day, so "the last day of the month" is untestable
-public decimal Calculate(Loan loan) { var today = System.DateTime.Today; ... }
+public decimal Calculate(Invoice invoice) { var today = System.DateTime.Today; ... }
 
 // ✓ the caller (and the test) decides what today is
-public decimal Calculate(Loan loan, System.DateOnly today) { ... }
+public decimal Calculate(Invoice invoice, System.DateOnly today) { ... }
 ```
 
 * The SUT reads `DateTime.UtcNow` itself and you can't change it: use relative values
@@ -40,9 +39,9 @@ var timeProvider = new FixedTimeProvider(start);
 Xunit.Assert.Equal(new System.DateOnly(2026, 10, 21), result.DueDate);
 ```
 
-* Stub: `FixedTimeProvider` in `FF.Tests/Features/FactoringFeature/FactoringOutboxTests.cs`
-  (a `TimeProvider` with a settable `UtcNow`). If a second test file needs it, move it to
-  `FF.Tests/Util/` and don't copy it.
+* Stub: a `FixedTimeProvider` (a `TimeProvider` with a settable `UtcNow`), or `FakeTimeProvider`
+  from `Microsoft.Extensions.TimeProvider.Testing`. Write it once in a shared test helper; don't
+  copy it per file.
 * Fixed literals are only safe with a test-owned clock. ✗ `new DateTime(2026, 1, 1)` passed to
   code that compares it with the real `DateTime.UtcNow`: it becomes "the past" once that date
   goes by.

@@ -22,4 +22,4 @@ Each module's tests live in its own `test/` folder, so the module stays extracta
 - Focused runs verify selected tests only. Before finishing a behavior change, run the full test project; repeat runs when investigating flakes/shared state.
 
 Example: `Issues_the_invoice_when_the_subscription_renews` with the renewal date visible in arrange and the expected amount literal in assert.
-Harnesses, matrices, calendar edges, and API/E2E setup: `.claude/skills/tests-as-documentation/SKILL.md` (its `FF.Tests` and SQL Server fixtures are FlexFunding's).
+Harnesses, matrices, calendar edges, and API/E2E setup: `.claude/skills/tests-as-documentation/SKILL.md`.

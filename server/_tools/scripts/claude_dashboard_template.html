@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>.claude metrics</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-raised: #ffffff;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --accent: #2a78d6;
+  --accent-wash: rgba(42, 120, 214, 0.10);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  --status-info: #898781;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-raised: #222220;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --accent-wash: rgba(57, 135, 229, 0.16);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-raised: #222220;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --accent: #3987e5;
+  --accent-wash: rgba(57, 135, 229, 0.16);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.45 var(--font);
+}
+.layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100vh;
+}
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 20px 16px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+.sidebar h1 { font-size: 16px; margin: 0 0 2px; }
+.sidebar .meta { color: var(--text-muted); font-size: 12px; margin-bottom: 18px; }
+.sidebar h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 18px 0 8px;
+}
+.sidebar nav a {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.sidebar nav a:hover { background: var(--accent-wash); color: var(--text-primary); }
+.sidebar label.check { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--text-secondary); cursor: pointer; }
+.sidebar .count { margin-left: auto; color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+input[type="search"], input[type="text"], select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+button:hover { background: var(--accent-wash); }
+main { padding: 24px 28px 64px; min-width: 0; }
+section { margin-bottom: 36px; scroll-margin-top: 16px; }
+section > h2 { font-size: 18px; margin: 0 0 4px; }
+section > p.lead { margin: 0 0 14px; color: var(--text-secondary); max-width: 80ch; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.tile .label { color: var(--text-secondary); font-size: 13px; }
+.tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+.tile .sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.tile.hero { grid-column: span 2; }
+.tile.hero .value { font-size: 52px; line-height: 1.1; }
+@media (max-width: 640px) { .tile.hero { grid-column: span 1; } }
+.stack { display: flex; height: 28px; gap: 2px; border-radius: 6px; overflow: hidden; background: var(--grid); }
+.stack > div { height: 100%; min-width: 2px; }
+.stack > div.rest { background: transparent; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--text-secondary); font-size: 13px; }
+.legend span.key { display: inline-flex; align-items: center; gap: 6px; }
+.bars { display: grid; grid-template-columns: minmax(140px, 260px) minmax(0, 1fr) 72px; gap: 8px 12px; align-items: center; }
+.bars .name { color: var(--text-secondary); font-size: 13px; }
+.bars .track { height: 14px; }
+.bars .fill { height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+.bars .number { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+#treemap { position: relative; height: 520px; }
+.cell {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #ffffff;
+  cursor: pointer;
+}
+.cell.dim { opacity: 0.18; }
+.cell.dark-ink { color: #0b0b0b; }
+.cell:hover { outline: 2px solid var(--text-primary); outline-offset: -2px; }
+.group-label {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.group-frame { position: absolute; border-radius: 6px; background: var(--grid); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--baseline);
+  white-space: nowrap;
+  user-select: none;
+}
+th[data-sort] { cursor: pointer; }
+th[data-sort]:hover { color: var(--text-primary); }
+th.sorted::after { content: " ▾"; }
+th.sorted.ascending::after { content: " ▴"; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+tr:hover td { background: var(--accent-wash); }
+td.number, th.number { text-align: right; font-variant-numeric: tabular-nums; }
+td.mono, .mono { font-family: var(--mono); font-size: 12px; }
+.inbar { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.inbar span { white-space: nowrap; }
+#skills-table td.mono, #rules-table td.mono { white-space: nowrap; }
+.inbar .track { width: 80px; height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; flex: none; }
+.inbar .fill { height: 100%; border-radius: 4px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.status-icon { font-size: 11px; }
+.severity-error .status-icon { color: var(--status-critical); }
+.severity-warning .status-icon { color: var(--status-warning); }
+.severity-info .status-icon { color: var(--status-info); }
+.glob { display: flex; justify-content: space-between; gap: 12px; }
+.muted { color: var(--text-muted); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.toolbar input { max-width: 420px; }
+.describe { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--text-secondary); font-size: 13px; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+.describe b { color: var(--text-primary); font-weight: 600; }
+.sim-result { margin-top: 14px; }
+.sim-result h3 { font-size: 13px; margin: 14px 0 6px; color: var(--text-secondary); }
+.sim-result ul { margin: 0; padding-left: 18px; }
+.sim-total { font-size: 28px; font-weight: 600; }
+#tooltip {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  max-width: 340px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+}
+#tooltip .title { font-weight: 600; margin-bottom: 4px; word-break: break-all; }
+#tooltip .row { display: flex; justify-content: space-between; gap: 16px; color: var(--text-secondary); }
+#tooltip .row b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  main { padding: 20px 16px 48px; }
+  .bars { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 60px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h1>.claude metrics</h1>
+    <div class="meta" id="meta"></div>
+    <h2>Sections</h2>
+    <nav>
+      <a href="#overview">Overview</a>
+      <a href="#budget">Context budget</a>
+      <a href="#map">Token map</a>
+      <a href="#simulator">Path simulator</a>
+      <a href="#skills">Skills</a>
+      <a href="#rules">Rules</a>
+      <a href="#hooks">Hooks &amp; permissions</a>
+      <a href="#issues">Issues</a>
+      <a href="#files">Files</a>
+    </nav>
+    <h2>Filter map + files</h2>
+    <input type="search" id="search" placeholder="Path contains…" aria-label="Filter by path">
+    <h2>Component</h2>
+    <div id="component-filters"></div>
+    <h2>Loads</h2>
+    <div id="load-filters"></div>
+  </aside>
+
+  <main>
+    <section id="overview">
+      <h2>Overview</h2>
+      <p class="lead" id="estimate-note"></p>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section id="budget">
+      <h2>Context budget</h2>
+      <p class="lead">What every session pays before you type, against the context window, and where the rest of the tokens sit until something loads them.</p>
+      <div class="two">
+        <div class="card">
+          <div class="muted" style="font-size:13px;margin-bottom:8px" id="budget-caption"></div>
+          <div class="stack" id="budget-stack" role="img"></div>
+          <div class="legend" id="budget-legend"></div>
+        </div>
+        <div class="card">
+          <div class="muted" style="font-size:13px;margin-bottom:10px">Tokens by load trigger (all files)</div>
+          <div class="bars" id="load-bars"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="map">
+      <h2>Token map</h2>
+      <p class="lead">Area = estimated tokens. Grouped by component → owner → file, colored by when the file loads. Click a cell to filter the files table to it.</p>
+      <div class="card">
+        <div id="treemap"></div>
+        <div class="legend" id="map-legend"></div>
+      </div>
+    </section>
+
+    <section id="simulator">
+      <h2>Path simulator</h2>
+      <p class="lead">Type a path Claude would read or edit. Shows the path-scoped rules that load for it, the skills CLAUDE.md's "Skills by where you work" table asks for, and the total context that adds up to.</p>
+      <div class="card">
+        <input type="text" id="sim-path" list="sim-paths" placeholder="src/features/billing-feature-example/payment-module/api/REST/PaymentController.cs" aria-label="Path to simulate">
+        <datalist id="sim-paths"></datalist>
+        <div class="sim-result" id="sim-result"></div>
+      </div>
+    </section>
+
+    <section id="skills">
+      <h2>Skills</h2>
+      <p class="lead">Listing = the name + description every session carries. Body = SKILL.md without frontmatter, loaded on invoke. Supporting = reference files read on demand. Lint comes from <span class="mono">building-skills/scripts/validate_skill.py</span>.</p>
+      <div class="card table-wrap"><table id="skills-table"></table></div>
+    </section>
+
+    <section id="rules">
+      <h2>Rules</h2>
+      <p class="lead">Each <span class="mono">paths:</span> glob with the number of project files it matches today (<span class="mono">.gitkeep</span> placeholders excluded). A path-scoped rule with 0 matches never loads.</p>
+      <div class="card table-wrap"><table id="rules-table"></table></div>
+    </section>
+
+    <section id="hooks">
+      <h2>Hooks &amp; permissions</h2>
+      <p class="lead">From <span class="mono">.claude/settings.json</span>. Hooks cost no context unless they print; they run on every matching tool call.</p>
+      <div class="two">
+        <div class="card table-wrap"><table id="hooks-table"></table></div>
+        <div class="card table-wrap"><table id="permissions-table"></table></div>
+      </div>
+    </section>
+
+    <section id="issues">
+      <h2>Issues</h2>
+      <p class="lead">Broken links and backtick paths, skill lint findings, rules that match nothing, and skills missing from or named in CLAUDE.md's skill table.</p>
+      <div class="toolbar" id="issue-filters"></div>
+      <div class="card table-wrap"><table id="issues-table"></table></div>
+    </section>
+
+    <section id="files">
+      <h2>Files</h2>
+      <p class="lead">Every file under <span class="mono">.claude/</span>. Click a header to sort. Code share = fraction of characters inside fenced code blocks.</p>
+      <div class="describe" id="describe"></div>
+      <div class="toolbar">
+        <button type="button" id="download-csv">Download CSV</button>
+        <button type="button" id="clear-filters">Clear filters</button>
+        <span class="muted" id="files-count"></span>
+      </div>
+      <div class="card table-wrap"><table id="files-table"></table></div>
+    </section>
+  </main>
+</div>
+<div id="tooltip" hidden></div>
+
+<script>
+const data = /*__DATA__*/null
+
+const loadOrder = ['always', 'listing', 'pathScoped', 'onInvoke', 'onDemand', 'executed', 'harness']
+const loadColors = {
+  always: 'var(--series-1)',
+  listing: 'var(--series-2)',
+  pathScoped: 'var(--series-3)',
+  onInvoke: 'var(--series-4)',
+  onDemand: 'var(--series-5)',
+  executed: 'var(--series-6)',
+  harness: 'var(--series-7)',
+}
+const darkInkLoads = ['pathScoped', 'onInvoke', 'onDemand']  // light fills: ink text instead of white
+const severityConfig = {
+  error: { icon: '✕', label: 'Error' },
+  warning: { icon: '▲', label: 'Warning' },
+  info: { icon: 'ℹ', label: 'Info' },
+}
+const treemapConfig = {
+  gapPixels: 2,
+  groupHeaderPixels: 18,
+  minimumLabelWidth: 54,
+  minimumLabelHeight: 26,
+  minimumGroupHeaderHeight: 44,
+}
+
+const state = {
+  search: '',
+  components: new Set(),
+  loads: new Set(),
+  severities: new Set(['error', 'warning', 'info']),
+  sorts: {
+    'skills-table': { key: 'bodyTokens', descending: true },
+    'rules-table': { key: 'tokens', descending: true },
+    'files-table': { key: 'tokens', descending: true },
+    'issues-table': { key: 'severity', descending: false },
+  },
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function formatNumber(value) {
+  return Number(value).toLocaleString('en-US')
+}
+
+function formatCompact(value) {
+  if (value >= 10000) {
+    return (value / 1000).toFixed(1) + 'K'
+  }
+  return formatNumber(value)
+}
+
+function formatPercent(fraction) {
+  if (fraction > 0 && fraction < 0.001) {
+    return '<0.1 %'
+  }
+  return (fraction * 100).toFixed(1) + ' %'
+}
+
+function inlineCode(text) {
+  return escapeHtml(text).replace(/`([^`]+)`/g, '<span class="mono">$1</span>')
+}
+
+function sortRows(rows, sort) {
+  const severityRank = { error: 0, warning: 1, info: 2 }
+  const sorted = rows.slice()
+  sorted.sort((left, right) => {
+    let leftValue = left[sort.key]
+    let rightValue = right[sort.key]
+    if (sort.key === 'severity') {
+      leftValue = severityRank[leftValue]
+      rightValue = severityRank[rightValue]
+    }
+    if (leftValue === rightValue) return 0
+    if (leftValue === null || leftValue === undefined) return 1
+    if (rightValue === null || rightValue === undefined) return -1
+    const order = leftValue < rightValue ? -1 : 1
+    return sort.descending ? -order : order
+  })
+  return sorted
+}
+
+function headerHtml(tableId, columns) {
+  const sort = state.sorts[tableId]
+  let html = '<thead><tr>'
+  for (const column of columns) {
+    let classes = column.number ? 'number' : ''
+    if (sort && column.key && sort.key === column.key) {
+      classes += ' sorted' + (sort.descending ? '' : ' ascending')
+    }
+    const sortAttribute = column.key ? ' data-sort="' + column.key + '"' : ''
+    html += '<th class="' + classes + '"' + sortAttribute + ' scope="col">' + escapeHtml(column.label) + '</th>'
+  }
+  return html + '</tr></thead>'
+}
+
+function inBarHtml(value, maximum, color, text) {
+  const fraction = maximum > 0 ? Math.min(value / maximum, 1) : 0
+  return '<div class="inbar"><span>' + text + '</span><div class="track"><div class="fill" style="width:'
+    + (fraction * 100).toFixed(1) + '%;background:' + color + '"></div></div></div>'
+}
+
+function loadPill(load) {
+  return '<span class="pill"><span class="swatch" style="background:' + loadColors[load] + '"></span>'
+    + escapeHtml(data.loadLabels[load].split(':')[0]) + '</span>'
+}
+
+function severityPill(severity) {
+  const config = severityConfig[severity]
+  return '<span class="pill severity-' + severity + '"><span class="status-icon" aria-hidden="true">'
+    + config.icon + '</span>' + config.label + '</span>'
+}
+
+function sum(values) {
+  let total = 0
+  for (const value of values) {
+    total += value
+  }
+  return total
+}
+
+function sumNodeValues(nodes) {
+  let total = 0
+  for (const node of nodes) {
+    total += node.value
+  }
+  return total
+}
+
+function filteredFiles() {
+  const results = []
+  for (const file of data.files) {
+    if (fileMatchesFilters(file)) {
+      results.push(file)
+    }
+  }
+  return results
+}
+
+function fileMatchesFilters(file) {
+  if (state.search && !file.path.toLowerCase().includes(state.search.toLowerCase())) return false
+  if (state.components.size > 0 && !state.components.has(file.component)) return false
+  if (state.loads.size > 0 && !state.loads.has(file.load)) return false
+  return true
+}
+
+function sessionStartParts() {
+  let memoryTokens = 0
+  let ruleTokens = 0
+  for (const file of data.files) {
+    if (file.load !== 'always') continue
+    if (file.component === 'rule') {
+      ruleTokens += file.tokens
+    } else {
+      memoryTokens += file.tokens
+    }
+  }
+  return [
+    { label: 'CLAUDE.md', tokens: memoryTokens, color: 'var(--series-1)' },
+    { label: 'Rules without paths', tokens: ruleTokens, color: 'var(--series-3)' },
+    { label: 'Skill listing', tokens: data.totals.listingTokens, color: 'var(--series-2)' },
+  ]
+}
+
+function renderMeta() {
+  document.getElementById('meta').innerHTML = escapeHtml(data.project) + ' · '
+    + escapeHtml(data.head || 'no git') + '<br>' + escapeHtml(data.generated)
+  document.getElementById('estimate-note').textContent = 'Token counts are estimates: characters ÷ '
+    + data.config.charactersPerToken + '. Code and tables usually tokenize denser, so read them as relative sizes, not exact counts.'
+}
+
+function renderTiles() {
+  const sessionTokens = data.totals.alwaysTokens + data.totals.listingTokens
+  let invokeTokens = 0
+  let demandTokens = 0
+  let totalTokens = 0
+  let totalLines = 0
+  for (const file of data.files) {
+    totalTokens += file.tokens
+    totalLines += file.lines
+    if (file.load === 'onInvoke') invokeTokens += file.tokens
+    if (file.load === 'onDemand') demandTokens += file.tokens
+  }
+  let errors = 0
+  let warnings = 0
+  for (const issue of data.issues) {
+    if (issue.severity === 'error') errors += 1
+    if (issue.severity === 'warning') warnings += 1
+  }
+  let largestSkill = null
+  for (const skill of data.skills) {
+    if (largestSkill === null || skill.bodyTokens > largestSkill.bodyTokens) {
+      largestSkill = skill
+    }
+  }
+  const tiles = [
+    {
+      hero: true,
+      label: 'Session start context',
+      value: '≈' + formatNumber(sessionTokens),
+      sub: formatPercent(sessionTokens / data.config.contextWindowTokens) + ' of a '
+        + formatCompact(data.config.contextWindowTokens) + ' window · loaded before the first prompt',
+    },
+    { label: 'Skill bodies (on invoke)', value: formatCompact(invokeTokens), sub: data.skills.length + ' skills · largest ' + (largestSkill ? largestSkill.name : '–') },
+    { label: 'References (on demand)', value: formatCompact(demandTokens), sub: 'supporting files inside skills' },
+    { label: 'All .claude tokens', value: formatCompact(totalTokens), sub: data.files.length + ' files · ' + formatNumber(totalLines) + ' lines' },
+    { label: 'Issues', value: formatNumber(errors + warnings), sub: errors + ' errors · ' + warnings + ' warnings · ' + (data.issues.length - errors - warnings) + ' info' },
+  ]
+  let html = ''
+  for (const tile of tiles) {
+    html += '<div class="card tile' + (tile.hero ? ' hero' : '') + '"><div class="label">' + escapeHtml(tile.label)
+      + '</div><div class="value">' + escapeHtml(tile.value) + '</div><div class="sub">' + escapeHtml(tile.sub) + '</div></div>'
+  }
+  document.getElementById('tiles').innerHTML = html
+}
+
+function renderBudget() {
+  const parts = sessionStartParts()
+  const sessionTokens = sum([parts[0].tokens, parts[1].tokens, parts[2].tokens])
+  // The window is ~1000x the session cost, so the bar shows the session parts against their own total,
+  // and the caption carries the window share.
+  document.getElementById('budget-caption').textContent = 'Session start ≈' + formatNumber(sessionTokens)
+    + ' tokens = ' + formatPercent(sessionTokens / data.config.contextWindowTokens) + ' of the window'
+  let stackHtml = ''
+  let legendHtml = ''
+  for (const part of parts) {
+    if (part.tokens === 0) continue
+    const fraction = part.tokens / sessionTokens
+    stackHtml += '<div data-tip="' + escapeHtml(part.label) + '|' + part.tokens + '|' + formatPercent(fraction) + ' of session start" style="flex:'
+      + part.tokens + ';background:' + part.color + '"></div>'
+    legendHtml += '<span class="key"><span class="swatch" style="background:' + part.color + '"></span>'
+      + escapeHtml(part.label) + ' · ' + formatNumber(part.tokens) + ' (' + formatPercent(fraction) + ')</span>'
+  }
+  const stack = document.getElementById('budget-stack')
+  stack.innerHTML = stackHtml
+  stack.setAttribute('aria-label', legendHtml.replace(/<[^>]+>/g, ' '))
+  document.getElementById('budget-legend').innerHTML = legendHtml
+
+  const totals = {}
+  for (const load of loadOrder) {
+    totals[load] = 0
+  }
+  for (const file of data.files) {
+    totals[file.load] += file.tokens
+  }
+  totals.listing = data.totals.listingTokens
+  let maximum = 0
+  for (const load of loadOrder) {
+    maximum = Math.max(maximum, totals[load])
+  }
+  let barsHtml = ''
+  for (const load of loadOrder) {
+    const width = maximum > 0 ? (totals[load] / maximum) * 100 : 0
+    barsHtml += '<div class="name">' + escapeHtml(data.loadLabels[load]) + '</div><div class="track"><div class="fill" data-tip="'
+      + escapeHtml(data.loadLabels[load]) + '|' + totals[load] + '" style="width:' + width.toFixed(1) + '%;background:'
+      + loadColors[load] + '"></div></div><div class="number">' + formatCompact(totals[load]) + '</div>'
+  }
+  document.getElementById('load-bars').innerHTML = barsHtml
+}
+
+function worstRatio(values, side, scale) {
+  let total = 0
+  let largest = 0
+  let smallest = Infinity
+  for (const value of values) {
+    const area = value * scale
+    total += area
+    largest = Math.max(largest, area)
+    smallest = Math.min(smallest, area)
+  }
+  const sideSquared = side * side
+  const totalSquared = total * total
+  return Math.max((sideSquared * largest) / totalSquared, totalSquared / (sideSquared * smallest))
+}
+
+function placeRow(row, rectangle, scale, results) {
+  let rowArea = 0
+  for (const node of row) {
+    rowArea += node.value * scale
+  }
+  if (rectangle.width >= rectangle.height) {
+    const columnWidth = rowArea / rectangle.height
+    let y = rectangle.y
+    for (const node of row) {
+      const height = (node.value * scale) / columnWidth
+      results.push({ node: node, x: rectangle.x, y: y, width: columnWidth, height: height })
+      y += height
+    }
+    return { x: rectangle.x + columnWidth, y: rectangle.y, width: rectangle.width - columnWidth, height: rectangle.height }
+  }
+  const rowHeight = rowArea / rectangle.width
+  let x = rectangle.x
+  for (const node of row) {
+    const width = (node.value * scale) / rowHeight
+    results.push({ node: node, x: x, y: rectangle.y, width: width, height: rowHeight })
+    x += width
+  }
+  return { x: rectangle.x, y: rectangle.y + rowHeight, width: rectangle.width, height: rectangle.height - rowHeight }
+}
+
+// Squarified treemap (Bruls, Huizing, van Wijk 2000): grow a row while its worst aspect ratio improves.
+function squarify(nodes, rectangle) {
+  const results = []
+  const total = sumNodeValues(nodes)
+  if (total <= 0 || rectangle.width <= 0 || rectangle.height <= 0) return results
+  const scale = (rectangle.width * rectangle.height) / total
+  let remaining = rectangle
+  let row = []
+  let rowValues = []
+  let index = 0
+  while (index < nodes.length) {
+    const node = nodes[index]
+    const side = Math.min(remaining.width, remaining.height)
+    const candidateValues = rowValues.concat([node.value])
+    if (row.length === 0 || worstRatio(candidateValues, side, scale) <= worstRatio(rowValues, side, scale)) {
+      row.push(node)
+      rowValues = candidateValues
+      index += 1
+      continue
+    }
+    remaining = placeRow(row, remaining, scale, results)
+    row = []
+    rowValues = []
+  }
+  if (row.length > 0) {
+    placeRow(row, remaining, scale, results)
+  }
+  return results
+}
+
+function buildHierarchy() {
+  const components = {}
+  for (const file of data.files) {
+    if (!components[file.component]) {
+      components[file.component] = { name: file.component, owners: {} }
+    }
+    const owners = components[file.component].owners
+    if (!owners[file.owner]) {
+      owners[file.owner] = { name: file.owner, children: [] }
+    }
+    owners[file.owner].children.push({ name: file.path.split('/').pop(), file: file, value: Math.max(file.tokens, 1) })
+  }
+  const roots = []
+  for (const componentName in components) {
+    const children = []
+    for (const ownerName in components[componentName].owners) {
+      const owner = components[componentName].owners[ownerName]
+      owner.children.sort((left, right) => right.value - left.value)
+      if (owner.children.length === 1) {
+        children.push(owner.children[0])
+      } else {
+        owner.value = sumNodeValues(owner.children)
+        children.push(owner)
+      }
+    }
+    children.sort((left, right) => right.value - left.value)
+    roots.push({ name: componentName, children: children, value: sumNodeValues(children) })
+  }
+  roots.sort((left, right) => right.value - left.value)
+  return roots
+}
+
+function layoutGroup(node, rectangle, depth, output) {
+  if (!node.children) {
+    output.push({ kind: 'cell', node: node, x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height })
+    return
+  }
+  const gap = treemapConfig.gapPixels
+  let inner = rectangle
+  if (rectangle.height >= treemapConfig.minimumGroupHeaderHeight && rectangle.width >= treemapConfig.minimumLabelWidth) {
+    output.push({ kind: 'frame', x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height, depth: depth })
+    output.push({ kind: 'label', node: node, x: rectangle.x + 6, y: rectangle.y + 2, width: rectangle.width - 12 })
+    inner = {
+      x: rectangle.x + gap,
+      y: rectangle.y + treemapConfig.groupHeaderPixels,
+      width: rectangle.width - gap * 2,
+      height: rectangle.height - treemapConfig.groupHeaderPixels - gap,
+    }
+  }
+  const placed = squarify(node.children, inner)
+  for (const item of placed) {
+    layoutGroup(item.node, { x: item.x, y: item.y, width: item.width, height: item.height }, depth + 1, output)
+  }
+}
+
+function renderTreemap() {
+  const container = document.getElementById('treemap')
+  const width = container.clientWidth
+  const height = container.clientHeight
+  if (width === 0 || height === 0) return
+  const gap = treemapConfig.gapPixels
+  const output = []
+  const roots = buildHierarchy()
+  const placed = squarify(roots, { x: 0, y: 0, width: width, height: height })
+  for (const item of placed) {
+    layoutGroup(item.node, { x: item.x, y: item.y, width: item.width, height: item.height }, 0, output)
+  }
+  let html = ''
+  for (const item of output) {
+    if (item.kind === 'frame') {
+      html += '<div class="group-frame" style="left:' + item.x + 'px;top:' + item.y + 'px;width:' + Math.max(item.width - gap, 0)
+        + 'px;height:' + Math.max(item.height - gap, 0) + 'px;opacity:' + (item.depth === 0 ? 1 : 0.6) + '"></div>'
+      continue
+    }
+    if (item.kind === 'label') {
+      html += '<div class="group-label" style="left:' + item.x + 'px;top:' + item.y + 'px;width:' + item.width + 'px">'
+        + escapeHtml(item.node.name) + ' · ' + formatCompact(item.node.value) + '</div>'
+      continue
+    }
+    const file = item.node.file
+    const cellWidth = Math.max(item.width - gap, 0)
+    const cellHeight = Math.max(item.height - gap, 0)
+    let classes = 'cell'
+    if (!fileMatchesFilters(file)) classes += ' dim'
+    if (darkInkLoads.includes(file.load)) classes += ' dark-ink'
+    let label = ''
+    if (cellWidth >= treemapConfig.minimumLabelWidth && cellHeight >= treemapConfig.minimumLabelHeight) {
+      label = escapeHtml(item.node.name) + '<br>' + formatCompact(file.tokens)
+    }
+    html += '<div class="' + classes + '" data-path="' + escapeHtml(file.path) + '" style="left:' + item.x + 'px;top:' + item.y
+      + 'px;width:' + cellWidth + 'px;height:' + cellHeight + 'px;background:' + loadColors[file.load] + '">' + label + '</div>'
+  }
+  container.innerHTML = html
+  let legendHtml = ''
+  for (const load of loadOrder) {
+    legendHtml += '<span class="key"><span class="swatch" style="background:' + loadColors[load] + '"></span>' + escapeHtml(data.loadLabels[load]) + '</span>'
+  }
+  document.getElementById('map-legend').innerHTML = legendHtml
+}
+
+function pathHasFragment(path, fragment) {
+  const normalizedPath = '/' + path.replace(/\\/g, '/')
+  const normalizedFragment = fragment.replace(/^\/+/, '')
+  return normalizedPath.includes('/' + normalizedFragment)
+}
+
+function renderSimulator() {
+  const input = document.getElementById('sim-path')
+  const path = input.value.trim().replace(/\\/g, '/').replace(/^\.\//, '')
+  const result = document.getElementById('sim-result')
+  if (!path) {
+    result.innerHTML = '<p class="muted">Pick or type a path to see what loads.</p>'
+    return
+  }
+  const matchedRules = []
+  for (const rule of data.rules) {
+    if (rule.load !== 'pathScoped') continue
+    for (const glob of rule.globs) {
+      if (new RegExp(glob.regex).test(path)) {
+        matchedRules.push({ rule: rule, glob: glob.glob })
+        break
+      }
+    }
+  }
+  const skillsByName = {}
+  for (const skill of data.skills) {
+    skillsByName[skill.name] = skill
+  }
+  const matchedSkills = []
+  const seenSkills = new Set()
+  const judgementRows = []
+  for (const row of data.skillTable) {
+    if (row.fragments.length === 0) {
+      judgementRows.push(row)
+      continue
+    }
+    let hit = false
+    for (const fragment of row.fragments) {
+      if (pathHasFragment(path, fragment)) {
+        hit = true
+        break
+      }
+    }
+    if (!hit) continue
+    for (const skillName of row.skills) {
+      if (seenSkills.has(skillName)) continue
+      seenSkills.add(skillName)
+      matchedSkills.push({ name: skillName, skill: skillsByName[skillName] || null, where: row.where })
+    }
+  }
+  const sessionTokens = data.totals.alwaysTokens + data.totals.listingTokens
+  let ruleTokens = 0
+  for (const match of matchedRules) {
+    ruleTokens += match.rule.tokens
+  }
+  let skillTokens = 0
+  for (const match of matchedSkills) {
+    if (match.skill) skillTokens += match.skill.bodyTokens
+  }
+  const total = sessionTokens + ruleTokens + skillTokens
+  let html = '<div class="muted" style="font-size:13px">Context after touching this path</div><div class="sim-total">≈' + formatNumber(total)
+    + ' tokens <span class="muted" style="font-size:14px;font-weight:400">' + formatPercent(total / data.config.contextWindowTokens) + ' of window</span></div>'
+  html += '<div class="stack" style="margin-top:8px">'
+    + '<div data-tip="Session start|' + sessionTokens + '" style="flex:' + sessionTokens + ';background:var(--series-1)"></div>'
+  if (ruleTokens > 0) html += '<div data-tip="Path-scoped rules|' + ruleTokens + '" style="flex:' + ruleTokens + ';background:var(--series-3)"></div>'
+  if (skillTokens > 0) html += '<div data-tip="Skill bodies|' + skillTokens + '" style="flex:' + skillTokens + ';background:var(--series-4)"></div>'
+  html += '</div><div class="legend">'
+    + '<span class="key"><span class="swatch" style="background:var(--series-1)"></span>Session start · ' + formatNumber(sessionTokens) + '</span>'
+    + '<span class="key"><span class="swatch" style="background:var(--series-3)"></span>Rules · ' + formatNumber(ruleTokens) + '</span>'
+    + '<span class="key"><span class="swatch" style="background:var(--series-4)"></span>Skill bodies · ' + formatNumber(skillTokens) + '</span></div>'
+  html += '<h3>Rules that load (' + matchedRules.length + ')</h3>'
+  if (matchedRules.length === 0) {
+    html += '<p class="muted">No path-scoped rule matches.</p>'
+  } else {
+    html += '<ul>'
+    for (const match of matchedRules) {
+      html += '<li><span class="mono">' + escapeHtml(match.rule.name) + '</span> via <span class="mono">' + escapeHtml(match.glob) + '</span> · ' + formatNumber(match.rule.tokens) + ' tokens</li>'
+    }
+    html += '</ul>'
+  }
+  html += '<h3>Skills the skill table asks for (' + matchedSkills.length + ')</h3>'
+  if (matchedSkills.length === 0) {
+    html += '<p class="muted">No folder row matches this path.</p>'
+  } else {
+    html += '<ul>'
+    for (const match of matchedSkills) {
+      const cost = match.skill ? formatNumber(match.skill.bodyTokens) + ' tokens' : 'not in .claude/skills (built-in or missing)'
+      html += '<li><span class="mono">' + escapeHtml(match.name) + '</span> · ' + cost + ' <span class="muted">(' + inlineCode(match.where) + ')</span></li>'
+    }
+    html += '</ul>'
+  }
+  if (judgementRows.length > 0) {
+    html += '<h3>Rows that apply by judgement, not path</h3><ul>'
+    for (const row of judgementRows) {
+      html += '<li class="muted">' + inlineCode(row.where) + ' → ' + escapeHtml(row.skills.join(', ')) + '</li>'
+    }
+    html += '</ul>'
+  }
+  result.innerHTML = html
+}
+
+function renderSkills() {
+  const columns = [
+    { key: 'name', label: 'Skill' },
+    { key: 'listingTokens', label: 'Listing', number: true },
+    { key: 'bodyTokens', label: 'Body', number: true },
+    { key: 'supportingTokens', label: 'Supporting', number: true },
+    { key: 'descriptionCharacters', label: 'Description chars', number: true },
+    { key: 'bodyLines', label: 'Body lines', number: true },
+    { key: 'files', label: 'Files', number: true },
+    { key: 'lintCount', label: 'Lint', number: true },
+    { key: 'inSkillTable', label: 'In CLAUDE.md table' },
+    { key: 'lastCommit', label: 'Last commit' },
+  ]
+  const rows = []
+  for (const skill of data.skills) {
+    const row = Object.assign({}, skill)
+    row.lintCount = skill.lintErrors.length * 100 + skill.lintWarnings.length
+    rows.push(row)
+  }
+  let maximumBody = 0
+  let maximumSupporting = 0
+  let maximumListing = 0
+  for (const row of rows) {
+    maximumBody = Math.max(maximumBody, row.bodyTokens)
+    maximumSupporting = Math.max(maximumSupporting, row.supportingTokens)
+    maximumListing = Math.max(maximumListing, row.listingTokens)
+  }
+  const sorted = sortRows(rows, state.sorts['skills-table'])
+  let html = headerHtml('skills-table', columns) + '<tbody>'
+  for (const row of sorted) {
+    const descriptionFraction = row.descriptionCharacters / data.config.skillDescriptionLimit
+    const descriptionColor = descriptionFraction > 1 ? 'var(--status-critical)' : descriptionFraction > 0.9 ? 'var(--status-warning)' : 'var(--series-1)'
+    const linesFraction = row.bodyLines / data.config.skillBodyLimitLines
+    const linesColor = linesFraction > 1 ? 'var(--status-critical)' : linesFraction > 0.6 ? 'var(--status-warning)' : 'var(--series-1)'
+    let lint = '<span class="muted">clean</span>'
+    if (row.lintErrors.length + row.lintWarnings.length > 0) {
+      const messages = row.lintErrors.concat(row.lintWarnings).join('\n')
+      lint = '<span title="' + escapeHtml(messages) + '">'
+      if (row.lintErrors.length > 0) lint += severityPill('error') + ' ' + row.lintErrors.length + ' '
+      if (row.lintWarnings.length > 0) lint += severityPill('warning') + ' ' + row.lintWarnings.length
+      lint += '</span>'
+    }
+    html += '<tr>'
+      + '<td class="mono">' + escapeHtml(row.name) + (row.manualOnly ? ' <span class="pill">manual</span>' : '') + '</td>'
+      + '<td class="number">' + inBarHtml(row.listingTokens, maximumListing, 'var(--series-2)', formatNumber(row.listingTokens)) + '</td>'
+      + '<td class="number">' + inBarHtml(row.bodyTokens, maximumBody, 'var(--series-4)', formatNumber(row.bodyTokens)) + '</td>'
+      + '<td class="number">' + inBarHtml(row.supportingTokens, maximumSupporting, 'var(--series-5)', formatNumber(row.supportingTokens)) + '</td>'
+      + '<td class="number">' + inBarHtml(row.descriptionCharacters, data.config.skillDescriptionLimit, descriptionColor, formatNumber(row.descriptionCharacters) + ' / ' + data.config.skillDescriptionLimit) + '</td>'
+      + '<td class="number">' + inBarHtml(row.bodyLines, data.config.skillBodyLimitLines, linesColor, formatNumber(row.bodyLines) + ' / ' + data.config.skillBodyLimitLines) + '</td>'
+      + '<td class="number">' + row.files + (row.scripts > 0 ? ' <span class="muted">(' + row.scripts + ' scripts)</span>' : '') + '</td>'
+      + '<td class="number">' + lint + '</td>'
+      + '<td>' + (row.inSkillTable ? '✓ yes' : '<span class="muted">– no</span>') + '</td>'
+      + '<td class="mono">' + escapeHtml(row.lastCommit || 'uncommitted') + '</td>'
+      + '</tr>'
+  }
+  document.getElementById('skills-table').innerHTML = html + '</tbody>'
+}
+
+function renderRules() {
+  const columns = [
+    { key: 'name', label: 'Rule' },
+    { key: 'load', label: 'Loads' },
+    { key: 'tokens', label: 'Tokens', number: true },
+    { key: 'matches', label: 'Matched files', number: true },
+    { label: 'paths: glob → matches' },
+  ]
+  const sorted = sortRows(data.rules, state.sorts['rules-table'])
+  let html = headerHtml('rules-table', columns) + '<tbody>'
+  for (const rule of sorted) {
+    let globs = '<span class="muted">no paths: loads every session</span>'
+    if (rule.globs.length > 0) {
+      globs = ''
+      for (const glob of rule.globs) {
+        const examples = glob.examples.length > 0 ? glob.examples.join('\n') : 'no matching file'
+        globs += '<div class="glob" title="' + escapeHtml(examples) + '"><span class="mono">' + escapeHtml(glob.glob)
+          + '</span><span class="number' + (glob.matches === 0 ? ' muted' : '') + '">' + glob.matches + '</span></div>'
+      }
+    }
+    const matchCell = rule.load === 'pathScoped' && rule.matches === 0
+      ? severityPill('info') + ' 0'
+      : (rule.load === 'always' ? '<span class="muted">–</span>' : formatNumber(rule.matches))
+    html += '<tr><td class="mono">' + escapeHtml(rule.name) + '</td><td>' + loadPill(rule.load) + '</td><td class="number">'
+      + formatNumber(rule.tokens) + '</td><td class="number">' + matchCell + '</td><td style="min-width:320px">' + globs + '</td></tr>'
+  }
+  document.getElementById('rules-table').innerHTML = html + '</tbody>'
+}
+
+function renderHooks() {
+  let html = headerHtml('hooks-table', [{ label: 'Event' }, { label: 'Matcher' }, { label: 'Command' }, { label: 'Timeout s', number: true }]) + '<tbody>'
+  if (data.hooks.length === 0) {
+    html += '<tr><td colspan="4" class="muted">No hooks configured.</td></tr>'
+  }
+  for (const hook of data.hooks) {
+    html += '<tr><td>' + escapeHtml(hook.event) + '</td><td class="mono">' + escapeHtml(hook.matcher) + '</td><td class="mono">'
+      + escapeHtml(hook.command) + '</td><td class="number">' + escapeHtml(hook.timeout === null ? '–' : hook.timeout) + '</td></tr>'
+  }
+  document.getElementById('hooks-table').innerHTML = html + '</tbody>'
+
+  let permissionsHtml = headerHtml('permissions-table', [{ label: 'Permission' }, { label: 'Rule' }]) + '<tbody>'
+  let count = 0
+  for (const kind of ['allow', 'ask', 'deny']) {
+    for (const rule of data.permissions[kind]) {
+      permissionsHtml += '<tr><td>' + kind + '</td><td class="mono">' + escapeHtml(rule) + '</td></tr>'
+      count += 1
+    }
+  }
+  if (count === 0) {
+    permissionsHtml += '<tr><td colspan="2" class="muted">No permission rules.</td></tr>'
+  }
+  document.getElementById('permissions-table').innerHTML = permissionsHtml + '</tbody>'
+}
+
+function renderIssueFilters() {
+  const counts = { error: 0, warning: 0, info: 0 }
+  for (const issue of data.issues) {
+    counts[issue.severity] += 1
+  }
+  let html = ''
+  for (const severity of ['error', 'warning', 'info']) {
+    html += '<label class="pill severity-' + severity + '" style="cursor:pointer"><input type="checkbox" data-severity="' + severity + '"'
+      + (state.severities.has(severity) ? ' checked' : '') + '><span class="status-icon" aria-hidden="true">' + severityConfig[severity].icon + '</span>'
+      + severityConfig[severity].label + ' · ' + counts[severity] + '</label>'
+  }
+  document.getElementById('issue-filters').innerHTML = html
+}
+
+function renderIssues() {
+  const rows = []
+  for (const issue of data.issues) {
+    if (state.severities.has(issue.severity)) {
+      rows.push(issue)
+    }
+  }
+  const sorted = sortRows(rows, state.sorts['issues-table'])
+  let html = headerHtml('issues-table', [{ key: 'severity', label: 'Severity' }, { key: 'where', label: 'Where' }, { key: 'message', label: 'Finding' }]) + '<tbody>'
+  if (sorted.length === 0) {
+    html += '<tr><td colspan="3" class="muted">Nothing to show.</td></tr>'
+  }
+  for (const issue of sorted) {
+    html += '<tr><td>' + severityPill(issue.severity) + '</td><td class="mono">' + escapeHtml(issue.where) + '</td><td>' + inlineCode(issue.message) + '</td></tr>'
+  }
+  document.getElementById('issues-table').innerHTML = html + '</tbody>'
+}
+
+function percentile(sortedValues, fraction) {
+  if (sortedValues.length === 0) return 0
+  const index = Math.min(sortedValues.length - 1, Math.floor(fraction * (sortedValues.length - 1) + 0.5))
+  return sortedValues[index]
+}
+
+function renderFiles() {
+  const files = filteredFiles()
+  const columns = [
+    { key: 'path', label: 'Path' },
+    { key: 'component', label: 'Component' },
+    { key: 'load', label: 'Loads' },
+    { key: 'tokens', label: 'Tokens', number: true },
+    { key: 'lines', label: 'Lines', number: true },
+    { key: 'words', label: 'Words', number: true },
+    { key: 'bytes', label: 'Bytes', number: true },
+    { key: 'codeShare', label: 'Code share', number: true },
+    { key: 'headings', label: 'Headings', number: true },
+    { key: 'commits', label: 'Commits', number: true },
+    { key: 'lastCommit', label: 'Last commit' },
+    { key: 'status', label: 'Git' },
+  ]
+  let maximumTokens = 0
+  const tokenValues = []
+  for (const file of files) {
+    maximumTokens = Math.max(maximumTokens, file.tokens)
+    tokenValues.push(file.tokens)
+  }
+  tokenValues.sort((left, right) => left - right)
+  const total = sum(tokenValues)
+  document.getElementById('describe').innerHTML = 'Tokens per file → '
+    + '<span>count <b>' + files.length + '</b></span><span>sum <b>' + formatNumber(total) + '</b></span>'
+    + '<span>mean <b>' + formatNumber(files.length > 0 ? Math.round(total / files.length) : 0) + '</b></span>'
+    + '<span>median <b>' + formatNumber(percentile(tokenValues, 0.5)) + '</b></span>'
+    + '<span>p90 <b>' + formatNumber(percentile(tokenValues, 0.9)) + '</b></span>'
+    + '<span>max <b>' + formatNumber(tokenValues.length > 0 ? tokenValues[tokenValues.length - 1] : 0) + '</b></span>'
+  document.getElementById('files-count').textContent = files.length + ' of ' + data.files.length + ' files'
+  const sorted = sortRows(files, state.sorts['files-table'])
+  let html = headerHtml('files-table', columns) + '<tbody>'
+  for (const file of sorted) {
+    html += '<tr>'
+      + '<td class="mono">' + escapeHtml(file.path) + '</td>'
+      + '<td>' + escapeHtml(file.component) + '</td>'
+      + '<td>' + loadPill(file.load) + '</td>'
+      + '<td class="number">' + inBarHtml(file.tokens, maximumTokens, loadColors[file.load], formatNumber(file.tokens)) + '</td>'
+      + '<td class="number">' + formatNumber(file.lines) + '</td>'
+      + '<td class="number">' + formatNumber(file.words) + '</td>'
+      + '<td class="number">' + formatNumber(file.bytes) + '</td>'
+      + '<td class="number">' + (file.codeShare * 100).toFixed(0) + ' %</td>'
+      + '<td class="number">' + file.headings + '</td>'
+      + '<td class="number">' + file.commits + '</td>'
+      + '<td class="mono">' + escapeHtml(file.lastCommit || '–') + '</td>'
+      + '<td>' + escapeHtml(file.status) + '</td>'
+      + '</tr>'
+  }
+  document.getElementById('files-table').innerHTML = html + '</tbody>'
+}
+
+function renderSidebarFilters() {
+  const componentCounts = {}
+  const loadCounts = {}
+  for (const file of data.files) {
+    componentCounts[file.component] = (componentCounts[file.component] || 0) + 1
+    loadCounts[file.load] = (loadCounts[file.load] || 0) + 1
+  }
+  let componentHtml = ''
+  const componentNames = Object.keys(componentCounts).sort()
+  for (const name of componentNames) {
+    componentHtml += '<label class="check"><input type="checkbox" data-component="' + escapeHtml(name) + '"'
+      + (state.components.has(name) ? ' checked' : '') + '>' + escapeHtml(name) + '<span class="count">' + componentCounts[name] + '</span></label>'
+  }
+  document.getElementById('component-filters').innerHTML = componentHtml
+  let loadHtml = ''
+  for (const load of loadOrder) {
+    if (!loadCounts[load]) continue
+    loadHtml += '<label class="check"><input type="checkbox" data-load="' + load + '"' + (state.loads.has(load) ? ' checked' : '') + '>'
+      + '<span class="swatch" style="background:' + loadColors[load] + '"></span>' + escapeHtml(data.loadLabels[load].split(':')[0])
+      + '<span class="count">' + loadCounts[load] + '</span></label>'
+  }
+  document.getElementById('load-filters').innerHTML = loadHtml
+}
+
+function renderSimulatorOptions() {
+  let html = ''
+  for (const path of data.readableFiles) {
+    html += '<option value="' + escapeHtml(path) + '">'
+  }
+  for (const file of data.files) {
+    html += '<option value="' + escapeHtml(file.path) + '">'
+  }
+  document.getElementById('sim-paths').innerHTML = html
+}
+
+function downloadCsv() {
+  const columns = ['path', 'component', 'owner', 'load', 'tokens', 'bodyTokens', 'lines', 'words', 'bytes', 'codeShare', 'headings', 'commits', 'lastCommit', 'status']
+  let csv = columns.join(',') + '\n'
+  for (const file of sortRows(filteredFiles(), state.sorts['files-table'])) {
+    const cells = []
+    for (const column of columns) {
+      const value = file[column] === null || file[column] === undefined ? '' : String(file[column])
+      cells.push(/[",\n]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value)
+    }
+    csv += cells.join(',') + '\n'
+  }
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+  link.download = 'claude-files-' + data.generated.slice(0, 10) + '.csv'
+  link.click()
+  URL.revokeObjectURL(link.href)
+}
+
+function showTooltip(event) {
+  const tooltip = document.getElementById('tooltip')
+  const cell = event.target.closest('[data-path], [data-tip]')
+  if (!cell) {
+    tooltip.hidden = true
+    return
+  }
+  let html = ''
+  if (cell.dataset.path) {
+    let file = null
+    for (const candidate of data.files) {
+      if (candidate.path === cell.dataset.path) {
+        file = candidate
+        break
+      }
+    }
+    if (!file) return
+    html = '<div class="title">' + escapeHtml(file.path) + '</div>'
+      + '<div class="row">Tokens<b>' + formatNumber(file.tokens) + '</b></div>'
+      + '<div class="row">Lines<b>' + formatNumber(file.lines) + '</b></div>'
+      + '<div class="row">Loads<b>' + escapeHtml(data.loadLabels[file.load].split(':')[0]) + '</b></div>'
+      + '<div class="row">Last commit<b>' + escapeHtml(file.lastCommit || '–') + '</b></div>'
+  } else {
+    const parts = cell.dataset.tip.split('|')
+    html = '<div class="title">' + escapeHtml(parts[0]) + '</div><div class="row">Tokens<b>' + formatNumber(parts[1]) + '</b></div>'
+    if (parts[2]) html += '<div class="row">Share<b>' + escapeHtml(parts[2]) + '</b></div>'
+  }
+  tooltip.innerHTML = html
+  tooltip.hidden = false
+  const offset = 14
+  let left = event.clientX + offset
+  let top = event.clientY + offset
+  if (left + tooltip.offsetWidth > window.innerWidth - 8) left = event.clientX - tooltip.offsetWidth - offset
+  if (top + tooltip.offsetHeight > window.innerHeight - 8) top = event.clientY - tooltip.offsetHeight - offset
+  tooltip.style.left = left + 'px'
+  tooltip.style.top = top + 'px'
+}
+
+function renderFiltered() {
+  renderTreemap()
+  renderFiles()
+}
+
+function renderTable(tableId) {
+  switch (tableId) {
+    case 'skills-table': renderSkills(); return
+    case 'rules-table': renderRules(); return
+    case 'files-table': renderFiles(); return
+    case 'issues-table': renderIssues(); return
+    default: return
+  }
+}
+
+function handleSortClick(event) {
+  const header = event.target.closest('th[data-sort]')
+  if (!header) return
+  const tableId = header.closest('table').id
+  const sort = state.sorts[tableId]
+  if (!sort) return
+  const key = header.dataset.sort
+  if (sort.key === key) {
+    sort.descending = !sort.descending
+  } else {
+    sort.key = key
+    sort.descending = true
+  }
+  renderTable(tableId)
+}
+
+function handleFilterChange(event) {
+  const input = event.target
+  if (input.dataset.component) {
+    if (input.checked) state.components.add(input.dataset.component)
+    else state.components.delete(input.dataset.component)
+    renderFiltered()
+    return
+  }
+  if (input.dataset.load) {
+    if (input.checked) state.loads.add(input.dataset.load)
+    else state.loads.delete(input.dataset.load)
+    renderFiltered()
+    return
+  }
+  if (input.dataset.severity) {
+    if (input.checked) state.severities.add(input.dataset.severity)
+    else state.severities.delete(input.dataset.severity)
+    renderIssues()
+  }
+}
+
+function clearFilters() {
+  state.search = ''
+  state.components.clear()
+  state.loads.clear()
+  document.getElementById('search').value = ''
+  renderSidebarFilters()
+  renderFiltered()
+}
+
+function start() {
+  if (!data) {
+    document.querySelector('main').innerHTML = '<p>No data embedded. Generate this page with claude_dashboard.py.</p>'
+    return
+  }
+  renderMeta()
+  renderTiles()
+  renderBudget()
+  renderSidebarFilters()
+  renderSimulatorOptions()
+  renderSimulator()
+  renderSkills()
+  renderRules()
+  renderHooks()
+  renderIssueFilters()
+  renderIssues()
+  renderFiles()
+  renderTreemap()
+
+  document.addEventListener('click', handleSortClick)
+  document.addEventListener('change', handleFilterChange)
+  document.addEventListener('mousemove', showTooltip)
+  document.getElementById('search').addEventListener('input', (event) => {
+    state.search = event.target.value
+    renderFiltered()
+  })
+  document.getElementById('sim-path').addEventListener('input', renderSimulator)
+  document.getElementById('download-csv').addEventListener('click', downloadCsv)
+  document.getElementById('clear-filters').addEventListener('click', clearFilters)
+  document.getElementById('treemap').addEventListener('click', (event) => {
+    const cell = event.target.closest('[data-path]')
+    if (!cell) return
+    state.search = cell.dataset.path
+    document.getElementById('search').value = cell.dataset.path
+    renderFiltered()
+    document.getElementById('files').scrollIntoView({ behavior: 'smooth' })
+  })
+  new ResizeObserver(renderTreemap).observe(document.getElementById('treemap'))
+}
+
+start()
+</script>
+</body>
+</html>

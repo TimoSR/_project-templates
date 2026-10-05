@@ -183,8 +183,8 @@ OPTIONS /v1/invoices/inv_9          Origin: https://app.example.com
 | Technique | Example | Protects against |
 |---|---|---|
 | Version in the URL | `/v1/invoices`, `/v2/invoices` | breaking clients when a field is removed or renamed; additive changes stay in v1 |
-| Base URL and timeouts in config | a vendor section in `appsettings.json`, bound to a config class (`TwilioConfig`, `AiiaConfig`) | redeploying code to change an endpoint |
-| One adapter per external API | `FF.App/Twilio/` is the only code that calls Twilio; callers use its service interface | vendor changes spreading through the app |
+| Base URL and timeouts in config | a vendor section in `appsettings.json`, bound to a config class (`TwilioConfig`, `HubSpotConfig`) | redeploying code to change an endpoint |
+| One adapter per external API | the module's `integration/Twillio/` is the only code that calls Twilio; callers use its service interface | vendor changes spreading through the app |
 | Tolerant reader | ignore unknown fields (`System.Text.Json` does by default); map unknown enum values to `unknown` | breaking when the provider adds fields |
 | API gateway | auth, rate limits and routing in front of many backends | duplicated cross-cutting code (`microservices-patterns`) |
 

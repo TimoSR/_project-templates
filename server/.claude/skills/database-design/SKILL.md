@@ -1,6 +1,6 @@
 ---
 name: database-design
-description: Applies the FlexFunding database standard for EF Core on SQL Server and PostgreSQL - logic placement, column types and enums, keys, multi-tenancy and row-level security, roles, indexes, queries, pagination and migration review. Use when adding or changing a table, entity, column, enum, index, view, DbContext, OnModelCreating or EF Core migration, designing tenant isolation, writing EF Core or SQL queries, adding a list endpoint or pagination, setting up database roles or grants, or reviewing a migration, even if the database is never mentioned. Also when the user mentions RLS, tenant_id, UUIDv7, stored procedures, triggers, SELECT *, N+1, AsNoTracking, compiled queries, query caching, keyset pagination or dotnet ef migrations. Covers a module's infrastructure/ folder (postgres, cache) and _tools/sql. Not for test database setup (tests-as-documentation).
+description: Applies the house database standard for EF Core on SQL Server and PostgreSQL - logic placement, column types and enums, keys, multi-tenancy and row-level security, roles, indexes, queries, pagination and migration review. Use when adding or changing a table, entity, column, enum, index, view, DbContext, OnModelCreating or EF Core migration, designing tenant isolation, writing EF Core or SQL queries, adding a list endpoint or pagination, setting up database roles or grants, or reviewing a migration, even if the database is never mentioned. Also when the user mentions RLS, tenant_id, UUIDv7, stored procedures, triggers, SELECT *, N+1, AsNoTracking, compiled queries, query caching, keyset pagination or dotnet ef migrations. Covers a module's infrastructure/ folder (postgres, cache) and _tools/sql. Not for test database setup (tests-as-documentation).
 ---
 
 # Database Design
@@ -9,24 +9,24 @@ The database stores data, enforces integrity and isolates tenants. Business logi
 
 ## Scope: new code follows the standard, legacy gets flagged
 
-This repo is SQL Server only (no Npgsql reference), so the PostgreSQL forms don't apply here yet. Most existing tables predate this standard (`int` keys, enums as `int`). Tenancy and RLS are target-only: no table has `TenantId` and there is no `Tenants` table yet.
+This template targets PostgreSQL (`infrastructure/postgress/`, `src/_config/infrastructure/databases/supabase.json`); the SQL Server column is for a project that picks SQL Server. Tenancy and RLS are target-only: no table has `TenantId` and there is no `Tenants` table until a project designs one.
 
 * New table, column, enum, index, view or DbContext → follow this skill.
 * Touching an existing table → match its current convention, and name the gap in your reply instead of migrating it:
 
 ```
-Note: Factorings.Status is stored as a string but has no CHECK constraint (database-design).
+Note: invoices.status is stored as a string but has no CHECK constraint (database-design).
 Not changed here; adding it is a separate migration.
 ```
 
-* Known repo-wide gap: migrations run at app startup (`TryMigrateDatabase` in `FF.Api/Program.cs` calls `DatabaseMigrator`, then `Migrate<Name>Feature` per feature module). That is the current deploy path, and `soft-extract-feature` relies on it. Keep using it, don't add a new mechanism, and flag it when relevant. Target: bundles applied in CI/CD by the migrator role.
+* No migration mechanism exists yet. The first module that needs one picks it (migrate at startup vs a bundle applied in CI/CD by the migrator role), states the trade-off and records it in `.claude/rules/persistence.md`.
 
 ## Core principles
 
 | Rule | ✗ | ✓ |
 |---|---|---|
-| No business logic in the database | `CREATE PROCEDURE ApproveLoan` with eligibility rules | Rules in an FF.App command; the database checks `NOT NULL`, `UNIQUE`, `CHECK`, foreign keys |
-| No hidden side effects: editing a row by hand must not trigger anything | Trigger that inserts into `AuditLog` or calls out | The app writes an outbox row in the same transaction, a dispatcher processes it (`FactoringOutboxMessage` + `FactoringOutboxDispatcher`) |
+| No business logic in the database | `CREATE PROCEDURE ApproveLoan` with eligibility rules | Rules in an `application/` command; the database checks `NOT NULL`, `UNIQUE`, `CHECK`, foreign keys |
+| No hidden side effects: editing a row by hand must not trigger anything | Trigger that inserts into `AuditLog` or calls out | The app writes an outbox row in the same transaction, a dispatcher processes it |
 | Data is readable without the source code | `Status = 3` | `Status = 'Cancelled'` with a CHECK listing the allowed values |
 | Proper types | money as `float`, dates as `nvarchar` | see the provider map |
 | Clear names, no abbreviations | `cust_amt` | `CustomerAmount` / `customer_amount` |
@@ -35,15 +35,15 @@ Not changed here; adding it is a separate migration.
 
 ## Provider map
 
-| Concept | PostgreSQL | SQL Server (this repo) |
+| Concept | PostgreSQL (this template) | SQL Server |
 |---|---|---|
 | Primary key | `uuid`; Npgsql 9+ generates UUIDv7 for `Guid` keys by default, or `Guid.CreateVersion7()` | `uniqueidentifier`; EF's default `SequentialGuidValueGenerator` for `Guid` keys. **Never `Guid.CreateVersion7()`**: SQL Server sorts `uniqueidentifier` by its last bytes first, so v7 fragments the index like a random v4 |
-| Point in time | `timestamptz` | `datetime2` holding UTC with a `Utc` suffix (`CreatedAtUtc`, repo convention) or `datetimeoffset` |
+| Point in time | `timestamptz` | `datetime2` holding UTC with a `Utc` suffix (`CreatedAtUtc`) or `datetimeoffset` |
 | Date only | `date` | `date` |
 | Money | `numeric(p, s)` | `decimal(p, s)`; set `HasPrecision(p, s)` explicitly |
 | Flag | `boolean` | `bit` |
 | Naming | `snake_case` (`UseSnakeCaseNamingConvention()` from EFCore.NamingConventions) | PascalCase, EF default, matches existing tables |
-| Organize by area | schema per area (`billing`, `identity`, `audit`, `reporting`) | schema per area or feature (`factoring`) |
+| Organize by area | schema per area (`billing`, `identity`, `audit`, `reporting`) | schema per area or feature (`billing`) |
 | Partial index | `HasFilter("deleted_at IS NULL")` | `HasFilter("[IsDeleted] = 0")` |
 | Build index without blocking writes | `IsCreatedConcurrently()` | `IsCreatedOnline()` (Enterprise or Azure SQL) |
 | Tenant per unit of work | `set_config('app.tenant_id', @id, true)` inside the transaction | `sp_set_session_context N'TenantId', @id, @read_only = 1` on every connection open |
@@ -128,8 +128,8 @@ Write the query in SQL first, then the LINQ that produces it, then decide tracki
 | Caching | none: the database is the source of truth | read-heavy, rarely-changing data (lookups, settings) → Redis/`IMemoryCache` with an explicit expiry and invalidation on write |
 
 ```csharp
-private static readonly Func<FFCoreDbContext, Guid, CancellationToken, Task<OrderDto?>> GetOrderById =
-    EF.CompileAsyncQuery((FFCoreDbContext db, Guid orderId, CancellationToken cancellationToken) =>
+private static readonly Func<InvoicingDbContext, Guid, CancellationToken, Task<OrderDto?>> GetOrderById =
+    EF.CompileAsyncQuery((InvoicingDbContext db, Guid orderId, CancellationToken cancellationToken) =>
         db.Orders
             .AsNoTracking()
             .Where(order => order.Id == orderId)
@@ -170,10 +170,8 @@ Every list endpoint is paginated with a server-side maximum page size.
 Review every generated migration before committing it, C# and SQL.
 
 ```bash
-# from API/FF-API/; feature context (migrations in FF.Api)
-dotnet ef migrations script <PreviousMigration> <NewMigration> --context <Name>DbContext --project FF.Api
-# FFCoreDbContext (migrations in FF.Core, same flags as scripts/add-migration.sh)
-dotnet ef migrations script <PreviousMigration> <NewMigration> --context FFCoreDbContext --project FF.Core --startup-project FF.Api
+# one DbContext per module store; add --project / --startup-project once the .csproj layout exists
+dotnet ef migrations script <PreviousMigration> <NewMigration> --context <Name>DbContext
 ```
 
 | EF gets it wrong or can't generate it | Do |

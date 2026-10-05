@@ -5,7 +5,7 @@ with a function, so the row says what it's aiming for without a comment.
 
 ```csharp
 // ✗ the intent lives in a comment; -15 means nothing on its own
-[InlineData(100000, 40000, 10000, AutoInvestStrategyEnum.Monthly, -15)] // Days 15-21: factor = 4
+[InlineData(100000, 40000, 10000, PayoutScheduleEnum.Monthly, -15)] // Days 15-21: factor = 4
 
 // ✓ the state has a name
 public static TheoryData<System.DateTime, int> MonthlyWeeks => new()
