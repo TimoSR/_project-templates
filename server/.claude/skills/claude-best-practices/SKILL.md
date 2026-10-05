@@ -48,5 +48,5 @@ uncertain approach, multi-file change, or unfamiliar code?
 ## Configuring `.claude/`
 
 * Choose the mechanism first ([reference §4](reference.md#4-configuring-the-environment)): `CLAUDE.md` for every-session rules, skills for on-demand knowledge, hooks for must-happen actions, subagents for isolated tasks.
-* For every `CLAUDE.md` line: *would removing this cause Claude to make mistakes?* If not, cut it.
+* For every `CLAUDE.md` line: *does it carry value Claude needs and can't derive itself (prevents a mistake, shapes a decision, gives a fact or example)?* If yes, keep it, whatever its length. If not, cut it. Value decides, never token count.
 * Write all of it per [high-quality-tokens](../high-quality-tokens/SKILL.md) (bullets, a concrete example per concept, no filler). Every line is reloaded in every session.

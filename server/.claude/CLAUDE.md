@@ -1,7 +1,35 @@
-# CLAUDE.md
+# Server Template
 
-- The backend won't boot without git-ignored local config (`appsettings.Development.json`,
-  `launchSettings.json`, `*.LocalDev.json`). Get them from a teammate; don't recreate them.
+A C# server architecture template. It is **opt-out**: new projects copy it and delete the parts they don't need, instead of adding structure from memory. It's a skeleton: most folders hold only `.gitkeep`, `src/program.cs` is empty, and there's no project file or build, run or test command yet.
+
+- The config files in `src/_config/` are tracked, empty placeholders. Secrets never go in them; they come from a secret store or git-ignored local config (see `rules/security.md`).
+
+## Claude Code knowledge (always loaded)
+
+@skills/claude-best-practices/SKILL.md
+@skills/claude-core-concepts/SKILL.md
+@skills/building-skills/SKILL.md
+
+## IMPORTANT: Value per token, not fewer tokens
+
+Judge context by the **value each token carries**, never by the token count. Every "cut" in these files (High-Quality Tokens below, the skills above) means "cut what carries no value". It never means "cut to save tokens".
+
+* Test for every line: does it give the reader something they need and can't derive themselves (a rule, a reason, a fact, an example)?
+   * Yes → it stays, however long it is and however often it loads.
+   * No → it goes, however short it is.
+* Context that is missing or wrong is worse than extra tokens: Claude then guesses.
+* Never propose removing or shrinking valuable content because of its size or load cost.
+
+| Content | Value | Decision |
+|---|---|---|
+| Approach / Data / Building Blocks sections that shape every design | high | keep |
+| An always-loaded skill that applies in every session | high | keep |
+| A concrete example that makes a rule unambiguous | high | keep, even if long |
+| Preamble, filler, a sentence that repeats the one above | none | cut |
+| A rule whose `paths:` match no file here (`API/FF-API/**` vs `src/features/**`) | none: it never loads | fix the paths |
+| A link to a missing file (`skills/security/guide.md`, only `SKILL.md` exists) | negative: misleads | fix the link |
+| Config written for another repo (`dotnet test API/FF-API/...`, `yarn` in `Web/`) | negative: misleads | match this repo |
+| Copies of a rule that disagree (CLAUDE.md vs `rules/code-style.md` vs `c-like-coding-style`) | negative: Claude has to pick one | make them consistent |
 
 ## IMPORTANT: High-Quality Tokens / High-Quality Density
 
@@ -19,6 +47,62 @@ Write only tokens that carry value for the reader or for future generations. A d
 # How We Work
 
 For any non-trivial feature, go through the Approach and Data questions before writing code, and state the answers briefly.
+
+## Layout
+
+```
+src/
+├── program.cs                                        entry point
+├── _architecture/                                    cross-cutting architecture code
+├── _contracts/                                       contracts shared between features
+├── _config/                                          appsettings, per-feature and infrastructure config
+├── _libs/                                            shared libraries
+└── features/
+    └── <feature>/
+        ├── <feature>-serviceServiceExtensions.cs     registers the feature's modules
+        ├── _contracts/                               contracts the feature exposes
+        └── <module>/
+            ├── <module>-serviceServiceExtensions.cs  registers the module
+            ├── _dto/                                 requests / commands, validated here (fail early)
+            ├── _critical/                            constants, enums
+            ├── api/                                  REST, GraphQL, event handlers
+            ├── application/                          use cases, orchestration
+            ├── domain/                               aggregates, events, policies, value objects
+            ├── infrastructure/                       cache, postgres
+            ├── integration/                          third-party services (Hubspot, Twilio)
+            └── test/
+_tools/                                               docker, scripts, sql, terraform
+```
+
+Config follows `config_guidelines.md`: defaults first, override per case.
+
+`a-feature` and `b-feature` are blank templates to copy. `billing-feature-example` shows a real split: invoicing, payment and subscription modules.
+
+## Rules for this repo
+
+* A feature can be a folder, a module or a separate library. Pick the smallest one the requirement needs. Starting in a single file is fine, so not every folder has to be used.
+* Keep things that belong together close, so it's obvious where to look. Avoid overly generic collections and catch-all folders.
+* The skills in `.claude/skills/` (`solid-principles`, `design-patterns`) are for review and refactoring once the simple version exists. Don't use them to design up front.
+* Folder names keep the existing spelling (`postgress`, `Twillio`) unless asked to rename them.
+
+See `../design_of_applications.md` and `../README.md` for the broader template philosophy.
+
+## Skills by where you work
+
+Invoke the matching skill before writing code there.
+
+| Working in | Skill |
+|---|---|
+| `api/`, `_dto/` | `api-design`, `security` |
+| `infrastructure/`, `_tools/sql` | `database-design` |
+| `integration/` | `system-integration` |
+| `test/`, or reproducing a bug | `tests-as-documentation`, `debug-exception` |
+| Splitting a feature, `_contracts/` | `microservices-patterns` |
+| `domain/`, `application/`, once the simple version works | `solid-principles`, `design-patterns` |
+| Any code | `c-like-coding-style`, `logging` |
+| Formulas, money, rates, units | `codemath` |
+| Slow or large code | `low-level-optimizations` |
+| Docs, CLAUDE.md, skills, memory | `high-quality-tokens`, `building-skills` |
 
 ## Approach
 

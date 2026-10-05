@@ -1,24 +1,25 @@
 ---
 paths:
-  - "API/FF-API/FF.Core/**/*.cs"
-  - "API/FF-API/FF.App/**/*.cs"
-  - "API/FF-API/FF.Api/Features/**/*.cs"
-  - "API/**/*.sql"
+  - "src/features/**/infrastructure/**"
+  - "src/_config/infrastructure/databases/**"
+  - "_tools/sql/**"
+  - "**/*.sql"
 ---
 
 # Persistence
 
-This repository uses SQL Server. New schema follows these standards; narrowly edited legacy tables keep their current key/enum conventions. Flag gaps without unsolicited migrations. PostgreSQL, tenancy/RLS, and migrator roles are conditional target designs, not prerequisites for ordinary work.
+The template's database is PostgreSQL (`infrastructure/postgress/`, `src/_config/infrastructure/databases/supabase.json`). Use the PostgreSQL column of the `database-design` provider map; its SQL Server column and FlexFunding notes (`FF.*` paths, startup migrator) don't apply here. Tenancy/RLS and database roles are opt-in target designs, not prerequisites for ordinary work.
 
-- Business rules live in application/domain code. Database constraints enforce integrity. No business procedures or hidden side-effect triggers; a documented purely technical timestamp trigger is allowed.
-- New tables use app-generated GUID keys with SQL Server/EF sequential generation, not `Guid.CreateVersion7`. Natural keys get unique indexes; internal lookup tables may use bigint identities.
-- Use UTC datetime2 (Utc suffix) or datetimeoffset, date for date-only, decimal with explicit precision for money, bit for flags. New enums store names with bounded length and a generated CHECK.
-- Index real query shapes: equality before range/sort, verify FK indexes, filtered indexes for common filters. Add tenant-leading indexes only when an explicitly designed tenant model exists.
-- Project only needed columns; filter/aggregate in SQL, avoid N+1, use AsNoTracking for reads, and pass CancellationToken. GraphQL projection/paging conventions remain valid.
+- Each module owns its stores in `infrastructure/postgress/<store>/` and `infrastructure/cache/<cache>/`. Other modules reach that data through the feature's `_contracts/`, never through the DbContext or tables.
+- Business rules live in `domain/` and `application/`. Database constraints enforce integrity. No business procedures or hidden side-effect triggers; a documented purely technical timestamp trigger is allowed.
+- New tables use app-generated UUIDv7 keys (Npgsql 9+ default for `Guid` keys, or `Guid.CreateVersion7()`). Natural keys get unique indexes; internal lookup tables may use bigint identities.
+- `timestamptz` for points in time, `date` for date-only, `numeric(p, s)` with explicit precision for money, `boolean` for flags, `snake_case` names, one schema per feature. Enums store names as bounded text with a generated CHECK.
+- Index real query shapes: equality before range/sort, verify FK indexes, partial indexes for common filters. Add tenant-leading indexes only when an explicitly designed tenant model exists.
+- Project only needed columns; filter/aggregate in SQL, avoid N+1, use AsNoTracking for reads, and pass CancellationToken.
 - For non-trivial EF queries, sketch SQL first and inspect ToQueryString. Compiled queries/caching need a measured reason; caching needs expiry/invalidation and safe owner scope.
-- Paginate list endpoints with bounded size and unique ordering; keyset is the default for large feeds, offset for small/page-number UIs. Compare GUID keyset cursors in SQL, not C# memory.
+- Paginate list endpoints with bounded size and unique ordering; keyset is the default for large feeds, offset for small/page-number UIs.
 - Review generated migrations and SQL. Replace destructive drop/add renames with rename operations; review backfills and reverse raw SQL in Down. Expand/backfill/switch/contract breaking schema changes across releases.
-- Preserve the current startup migration mechanism unless deployment changes are requested. Do not introduce RLS, new roles, or a migrator pipeline as incidental cleanup.
+- No migration mechanism exists yet. The first module that needs one picks it (migrate at startup vs a bundle applied in CI), states the trade-off, and records the choice here. Do not introduce RLS, new roles, or a migrator pipeline as incidental cleanup.
 
-Example: `decimal` + `HasPrecision` for an amount; a touched legacy int key remains int.
-Design/provider recipes: `.claude/skills/database-design/guide.md` and `tenancy-and-security.md`.
+Example: `amount numeric(19, 4)` + `HasPrecision(19, 4)`; `status text CHECK (status IN ('Draft', 'Issued', 'Paid'))`.
+Design/provider recipes: `.claude/skills/database-design/SKILL.md` and `tenancy-and-security.md`.

@@ -9,7 +9,8 @@ description: >-
   a test type, or when the user says "write tests", "add a test", "integration
   test", "API test", "e2e test", "architecture test", "check it implements the
   interface", "test this handler/service/command/endpoint", "cover this with
-  tests", or "the tests are flaky / failing". Not for tracing a production
+  tests", or "the tests are flaky / failing". Covers a module's test/ folder.
+  Not for tracing a production
   exception to its source (debug-exception).
 ---
 

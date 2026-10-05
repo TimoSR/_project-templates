@@ -1,10 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet test API/FF-API/FF.Tests/FF.Tests.csproj:*)",
-      "Bash(dotnet build API/FF-API/FF.Tests/FF.Tests.csproj:*)",
-      "Bash(dotnet test API/FF-API/FF.Tests/FF.Tests.csproj*)",
-      "Bash(dotnet build API/FF-API/FF.Tests/FF.Tests.csproj*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git rev-parse:*)"
