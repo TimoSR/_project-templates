@@ -17,33 +17,37 @@ Integrating vendors, plus the infrastructure around integrations: Redis, schedul
 
 ## 1. The adapter: one per vendor
 
+The repo's reference adapter, Factoring → HubSpot:
+
 ```
-features/billing/payment/
-├── application/charge-invoice.cs        calls the gateway with OUR types: invoiceId, amountCents, currency
-└── integration/Stripe/
-    ├── stripe-payment-gateway.cs        the only code that references Stripe.net
-    └── stripe-webhook-verifier.cs       signature check for incoming events
-src/_config/infrastructure/stripe.json   base URL, API version, timeouts, secret names
+API/FF-API/
+├── _CONTRACTS/Integrations/
+│   ├── IHubSpotIntegrationClient.cs       port shared by the monolith and features
+│   └── IHubSpotDataMapper.cs              maps one of OUR types to HubSpot properties
+└── FF.Api/Features/FactoringFeature/Integration/
+    ├── IFactoringHubSpotClient.cs         the feature's own port, wrapping the shared client
+    ├── FactoringHubSpotDataMapper.cs      Factoring → HubSpot deal
+    └── FactoringHubSpotLoanStatusMapper.cs  our status enum → HubSpot loan_status labels
 ```
 
-* Vendor SDK types never leave `integration/<Vendor>/`. The adapter maps them to our DTOs and value objects (an anti-corruption layer), catches vendor exceptions and returns a result.
-* Every outbound call gets a timeout and a circuit breaker: `services.AddHttpClient<HubspotClient>().AddStandardResilienceHandler()`.
+* Vendor SDK types never leave the adapter folder. The adapter maps them to our DTOs and value objects (an anti-corruption layer), catches vendor exceptions and returns a result.
+* Every outbound call gets a timeout and a circuit breaker: `services.AddHttpClient<HubSpotClient>().AddStandardResilienceHandler()` (`Microsoft.Extensions.Http.Resilience`; not in the repo yet, existing RestSharp agents have neither).
 * Retry only what is safe to repeat: GETs, or writes carrying an idempotency key (Stripe's `Idempotency-Key` header).
 * Respect rate limits: on `429`, wait for `Retry-After`.
 * Pin the vendor's API version (`Stripe-Version`, `X-GitHub-Api-Version`) and upgrade on purpose.
 * Secrets: config holds the setting's name; the value comes from env vars, user secrets or Key Vault, never git.
 * Tests: application tests fake the adapter; adapter tests replay recorded vendor responses (fixtures); one manual run against the vendor's sandbox (Stripe test mode, Twilio test credentials).
-* Several features need the same vendor → move the adapter to `src/_libs/`. An API gateway is for inbound traffic, not for wrapping vendors.
+* Several features need the same vendor → put the port in `_CONTRACTS/Integrations/` and implement it once (the monolith's `FF.App/Services/HubSpot/`). An API gateway is for inbound traffic, not for wrapping vendors.
 
 ## 2. Receiving webhooks
 
 ```
-Vendor ──POST /v1/webhooks/stripe (raw body + signature header)──▶ api/REST
+Vendor ──POST /v1/webhooks/stripe (raw body + signature header)──▶ API/REST
   1. read the raw body: verify these exact bytes; re-serialized JSON won't match
   2. verify the HMAC signature; reject old timestamps (replay)     → 400/401 on failure
   3. insert the event id into the inbox table; duplicate → 200, stop
   4. return 200 within a few seconds; the vendor retries on timeouts and 5xx
-  5. a worker in api/EventHandlers processes the inbox: fetch the current object from the
+  5. a worker (`BackgroundService`, or the feature's `Integration/` handler) processes the inbox: fetch the current object from the
      vendor API when order matters, then call the use case
 ```
 
@@ -84,12 +88,20 @@ app.MapPost("/v1/webhooks/github", async (aspnet.HttpRequest request, WebhookInb
 
     if (!isValidSignature(rawBody, request.Headers[githubWebhookConfig.signatureHeader])) return aspnet.Results.Unauthorized();
 
-    await inbox.addOnce(request.Headers[githubWebhookConfig.deliveryIdHeader].ToString(), rawBody); // INSERT … ON CONFLICT DO NOTHING
+    await inbox.addOnce(request.Headers[githubWebhookConfig.deliveryIdHeader].ToString(), rawBody); // insert; a duplicate key means already received
     return aspnet.Results.Ok(); // 200 for duplicates too, or the sender keeps retrying
 });
 ```
 
 * Stripe: `Stripe.EventUtility.ConstructEvent(json, signatureHeader, endpointSecret)` checks the signature and a 5-minute timestamp tolerance. It throws on failure, so call it inside the adapter and return a result.
+* The repo's receivers, in `FF.Api/Controllers/`:
+
+| Vendor | Endpoint | Signature | Dedupe |
+|---|---|---|---|
+| AIIA (bank) | `Aiia/AiiaController` `POST webhook` → MediatR → `AiiaWebhookHandler` | HMAC-SHA256 over `timestamp\|eventId\|eventType\|body`, header `X-Aiia-Signature` | `X-Aiia-EventId` stored as an `AiiaNotification` row |
+| Stripe | `Stripe/StripeController` `POST webhook` | `EventUtility.ConstructEvent`, secret `StripeWebhookSecret` from key-value storage | — |
+| ZignSec (KYC) | `Kyc/ZingSecWebhookController` | HMAC-SHA256, header `X-ZignSec-Hmac-SHA256` (`ZingSecSignatureValidator`) | — |
+| GetID (KYC) | `Kyc/GetIdWebhookController` | `GetIdSignatureValidator` | — |
 * Local testing: expose localhost with ngrok (§10), or replay events with the vendor's CLI (`stripe listen --forward-to localhost:5000/v1/webhooks/stripe`).
 
 ## 3. Sending webhooks
@@ -115,26 +127,33 @@ POST   /v1/webhooks/{id}/ping    send a test event now
 
 **Auth**
 
-```
-browser ──sign in──▶ provider (Supabase, Auth0, Entra ID, Firebase) ──▶ JWT access token
-browser ──Authorization: Bearer <jwt>──▶ our API: verify signature (provider's JWKS), iss, aud, exp → read claims
+```mermaid
+sequenceDiagram
+    participant browser
+    participant provider as provider (Supabase, Auth0, Entra ID, Firebase)
+    participant api as our API
+    browser->>provider: sign in
+    provider-->>browser: JWT access token
+    browser->>api: Authorization: Bearer JWT
+    Note over api: verify signature (provider's JWKS),<br/>iss, aud, exp, then read claims
 ```
 
-* Don't build auth yourself: password storage, resets, MFA, lockout and token rotation are each a security project. Config lives in `src/_config/infrastructure/authentication.json`.
+* Don't build auth yourself: password storage, resets, MFA, lockout and token rotation are each a security project.
 * .NET: `AddAuthentication().AddJwtBearer(options => { options.Authority = …; options.Audience = …; })`.
+* This repo differs from the diagram: Firebase (username/password), Criipto and Signicat (MitID) sign the user in, then the API issues its own HS256 JWT (`FTB/Ftb/Services/JwtTokenService/JwtService.cs`) and validates it with a symmetric key, issuer and audience (`FF.Api/Infrastructure/AuthenticationBuilderExtensions.cs`).
 * Short-lived access tokens + refresh tokens. Don't put data in a token that must take effect immediately (roles revoked now).
 * Price at scale differs a lot between providers (per monthly active user vs free tiers): check before committing.
 * SSO (OIDC, SAML): one identity across many apps. Cloud IAM (Entra ID, Google Cloud IAM): who may touch infrastructure. These are different from app user auth.
-* MFA: use the provider's feature (Auth0 + Twilio for SMS codes) instead of sending codes yourself.
+* MFA: use the provider's feature (Auth0 + Twilio for SMS codes) instead of sending codes yourself. This repo already runs its own TOTP MFA (`FF.App/Services/Mfa/Providers/TotpMfaProvider.cs`, Otp.NET): extend that, don't add a second mechanism.
 
-**SMS** (Twilio, Azure Communication Services)
+**SMS** (Twilio, Azure Communication Services; this repo: Twilio via `FF.App/Twilio/`)
 
 * Phone numbers in E.164: `+4512345678`.
 * Send through the REST API; the delivery status arrives later through a status-callback webhook.
 * Costs per message and sender-id rules differ per country; add a rate limit per user against abuse.
 * One-time codes: prefer the vendor's verify API, or store the code in Redis with an expiry (§6).
 
-**Email** (SendGrid, Azure Communication Services Email, Postmark; or SMTP via MailKit)
+**Email** (SendGrid, Azure Communication Services Email, Postmark; or SMTP via MailKit; this repo: HubSpot, `HubSpotEmailClient : IEmailSender`)
 
 * SMTP: port 587 with STARTTLS.
 * Deliverability needs SPF, DKIM and DMARC DNS records on the sending domain.
@@ -184,6 +203,7 @@ while queue not empty and pages < maxPages:
 | Location | `GEOADD shops 12.57 55.68 shop_1` | longitude first |
 
 * Key names: `<feature>:<entity>:<id>` (`billing:invoice:inv_9`). `SELECT <n>` switches between numbered databases.
+* This repo: `IDistributedCache` via `AddStackExchangeRedisCache` (falls back to an in-memory cache when the `Redis` connection string is empty, so locally nothing is shared between instances); `IConnectionMultiplexer` for `ActiveAppInstanceCoordinator` (set `ff:app:instances`, 2-minute expiry).
 * `KEYS *` blocks the server while it scans: use `SCAN` outside a laptop. `UNLINK` deletes in the background.
 * Persistence: RDB snapshots (compact, may lose minutes) + AOF (logs every write, small overhead). Use both for data you care about.
 * Replication: one primary, read replicas, manual failover with `REPLICAOF NO ONE` (Sentinel or a managed service automates it).
@@ -210,10 +230,11 @@ while queue not empty and pages < maxPages:
 
 | Option | Runs | Fits |
 |---|---|---|
-| `crontab` on a VM | once, on that VM | scripts in `_tools/scripts/`: backups, cleanups |
+| `crontab` on a VM | once, on that VM | scripts: backups, cleanups |
 | `BackgroundService` + `PeriodicTimer` | once per instance | in-app work on a single instance |
 | Hangfire, Quartz.NET (clustered, DB-backed) | once across instances | self-hosted, needs retries and a dashboard |
 | Azure Functions timer trigger, Kubernetes CronJob | once, managed | cloud default |
+| This repo: Quartz in process (`FTB/Ftb/Batch/BatchRunnerHostedService`) + `ActiveAppInstanceCoordinator` | once: only the newest instance keeps its hosted services running | new jobs go here, not into a second scheduler |
 
 * Every job must be idempotent and safe to rerun: it will run twice eventually.
 * For heavy jobs, the timer only enqueues work; workers do it (messaging.md §6).
@@ -224,12 +245,15 @@ while queue not empty and pages < maxPages:
 |---|---|---|
 | Run code on events or a timer without managing servers | Azure Functions | triggers (HTTP, Timer, Blob, Queue, Service Bus) start a function; bindings read and write data without SDK code; use the isolated worker model |
 | Files, images, backups | Storage account → Blob | containers; hot, cool and archive tiers; give clients SAS URLs, never the account key |
-| SMB file share | Storage account → Files | mount from Windows, Linux, macOS |
+| SMB file share | Storage account → Files | mount from Windows, Linux, macOS; Entra ID permissions per user and group |
+| Analytics over large files (Parquet, CSV, logs) | Data Lake Storage Gen2 | Blob with a hierarchical namespace: real folders, folder-level ACLs; read by Databricks, Synapse, Data Factory |
+| A VM's disk | Managed Disks | block storage attached to one VM; Premium SSD, Standard SSD or HDD; not for sharing files between apps |
+| High-throughput NFS/SMB for databases, HPC, VDI | Azure NetApp Files | enterprise NAS, low latency; pricey: only when Files is measured too slow |
 | Simple key-value table | Storage account → Table | cheap NoSQL |
 | Simple queue | Storage account → Queue | 64 KB messages; Service Bus for topics, sessions, dead-letters |
 | Container images | Container Registry (ACR) | `docker build -t myregistry.azurecr.io/billing:1.4.0 .`, `docker push …`; Container Apps or AKS pull with a managed identity |
 | A full machine | Virtual Machines | you patch the OS and secure the network (network security groups); prefer managed services |
-| Hosted databases | Azure Database for PostgreSQL, Supabase, Redis Cloud | connection string from config, TLS on, network allow-list, backups and point-in-time restore depend on the tier |
+| Hosted databases | SQL Server (this repo), Azure Database for PostgreSQL, Supabase, Redis Cloud | connection string from config, TLS on, network allow-list, backups and point-in-time restore depend on the tier |
 
 ```csharp
 // Isolated worker model: a function that runs when a blob lands in "uploads"
@@ -239,7 +263,6 @@ public static void resizeUploadedImage(
     string name) { … }
 ```
 
-* Infrastructure as code lives in `_tools/terraform/`.
 * Cheap static hosting for frontends: Azure Storage static website, S3, GitHub Pages, behind a CDN.
 
 ## 9. Documenting APIs, databases and architecture
@@ -247,7 +270,8 @@ public static void resizeUploadedImage(
 **OpenAPI**
 
 * Describes paths, parameters, request and response schemas, status codes and auth, in YAML or JSON. From it come docs, generated clients (NSwag, Kiota, openapi-generator) and contract tests.
-* .NET 9+: `builder.Services.AddOpenApi(); app.MapOpenApi();` serves `/openapi/v1.json`. Add Scalar or Swagger UI to browse it. Express: swagger-jsdoc; FastAPI: built in at `/docs`.
+* This repo: NSwag (`services.AddOpenApiDocument(...)`, `app.UseOpenApi()`, `app.UseSwaggerUi()` in `Startup.cs`); keep it, don't add `Microsoft.AspNetCore.OpenApi` beside it. Express: swagger-jsdoc; FastAPI: built in at `/docs`.
+* Contract content (schemas, status codes, versioning): `api-design`.
 * Commit the generated document and diff it in CI: a removed field is a breaking change.
 
 **Databases**
@@ -255,13 +279,15 @@ public static void resizeUploadedImage(
 * A data dictionary per table: column, type, meaning, example, owner. Keep it next to the data:
 
 ```sql
-COMMENT ON COLUMN invoice.amount_cents IS 'Total including VAT, in minor units of invoice.currency';
+-- SQL Server (this repo); Postgres: COMMENT ON COLUMN invoice.amount_cents IS '…';
+EXEC sp_addextendedproperty 'MS_Description', 'Total including VAT, in minor units of invoice.currency',
+     'SCHEMA', 'dbo', 'TABLE', 'invoice', 'COLUMN', 'amount_cents';
 ```
 
 * An ER diagram generated from the schema, and migrations in git as the schema's history.
 * Access per consumer: one role per consumer with least privilege (`GRANT SELECT ON invoice TO reporting;`), and views or column grants to hide personal data.
 * Backups:
-   * `pg_dump -Fc billing > billing.dump` (Postgres), `mysqldump --single-transaction billing > billing.sql` (MySQL).
+   * `BACKUP DATABASE billing TO DISK = 'billing.bak'` (SQL Server; Azure SQL backs up automatically with point-in-time restore), `pg_dump -Fc billing > billing.dump` (Postgres), `mysqldump --single-transaction billing > billing.sql` (MySQL).
    * Full, incremental (changes since the last backup) or differential (changes since the last full), chosen by how much data you can afford to lose.
    * Scheduled (cron, §7), stored off-site: 3 copies, 2 media, 1 off-site.
    * A backup counts only after a test restore.
@@ -278,6 +304,6 @@ COMMENT ON COLUMN invoice.amount_cents IS 'Total including VAT, in minor units o
    * Process: `export Billing__Stripe__ApiKey=…` (bash) or `$env:Billing__Stripe__ApiKey='…'` (PowerShell) lives in that shell and its children only.
    * Runtime config: .NET layers `appsettings.json` → `appsettings.{Environment}.json` → user secrets (Development) → environment variables → command line; the later source wins. `Billing__Stripe__ApiKey` maps to `Billing:Stripe:ApiKey`.
    * Node reads `process.env` (dotenv for `.env` files); Python reads `os.environ` (python-dotenv).
-* Defaults first, overridden per environment (`src/_config/config_guidelines.md`). Secrets: `dotnet user-secrets set "Billing:Stripe:ApiKey" "…"` locally, Key Vault in Azure.
+* Defaults first, overridden per environment. This repo: `FF.Api/appsettings.json` bound to `ConfigSettings`; the backend won't boot without the git-ignored `appsettings.Development.json`, `launchSettings.json` and `*.LocalDev.json`: get them from a teammate, don't recreate them. Secrets: Key Vault (`FF.App/Services/KeyValueStorage/`); elsewhere `dotnet user-secrets set "Billing:Stripe:ApiKey" "…"` locally.
 * Receive webhooks on a laptop: `ngrok http 5000` (or `devtunnel host -p 5000`) gives a public HTTPS URL that forwards to localhost. Free ngrok URLs change per session, so re-register the webhook each time.
-* Local dependencies (Redis, RabbitMQ, Postgres) run from `_tools/docker/` with Docker Compose.
+* Local dependencies: the repo has no Docker Compose. Without a `Redis` connection string the cache is in memory; tests get SQL Server from Testcontainers (`tests-as-documentation`).

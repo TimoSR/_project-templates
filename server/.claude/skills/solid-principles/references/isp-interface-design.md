@@ -7,7 +7,6 @@
 - 3. Split by architectural need
 - Supplying segregated interfaces
 - Single-method interfaces
-- Checklist
 
 ## Core idea
 
@@ -15,6 +14,7 @@
 * Every implementer, *including every decorator and adapter*, must implement every member. A big interface forces contracts nobody uses in full.
 * The book's test: **for every member, there should be a meaningful analogue of each decoration you'd want to apply.**
 * Three reasons to split: **decoration**, **client need**, **architectural need**.
+* Segregate when you *create* an interface: it's far cheaper at design time than as a refactor.
 
 ## 1. Split for decoration
 
@@ -37,19 +37,28 @@ public interface ICreateReadUpdateDelete<TEntity>
 
 ```csharp
 // ✗ delete confirmation on the fat interface: four pass-throughs, and each still needs a test
-class DeleteConfirmation<T>(ICreateReadUpdateDelete<T> inner) : ICreateReadUpdateDelete<T>
+class DeleteConfirmation<T> : ICreateReadUpdateDelete<T>
 {
-    public void Create(T entity) => inner.Create(entity);
-    public T ReadOne(Guid id) => inner.ReadOne(id);
-    public IEnumerable<T> ReadAll() => inner.ReadAll();
-    public void Update(T entity) => inner.Update(entity);
-    public void Delete(T entity) { if (Confirm()) inner.Delete(entity); }
+    private readonly ICreateReadUpdateDelete<T> inner;
+    public DeleteConfirmation(ICreateReadUpdateDelete<T> inner) { this.inner = inner; }
+    public void Create(T entity) { inner.Create(entity); }
+    public T ReadOne(Guid id) { return inner.ReadOne(id); }
+    public IEnumerable<T> ReadAll() { return inner.ReadAll(); }
+    public void Update(T entity) { inner.Update(entity); }
+    public void Delete(T entity) { if (Confirm()) { inner.Delete(entity); } }
 }
 
 // ✓ split off IDelete<T>: the decorator is one method, and the prompt is its own abstraction
-class DeleteConfirmation<T>(IDelete<T> inner, IUserInteraction userInteraction) : IDelete<T>
+class DeleteConfirmation<T> : IDelete<T>
 {
-    public void Delete(T entity) { if (userInteraction.Confirm("Delete?")) inner.Delete(entity); }
+    private readonly IDelete<T> inner;
+    private readonly IUserInteraction userInteraction;
+    public DeleteConfirmation(IDelete<T> inner, IUserInteraction userInteraction)
+    {
+        this.inner = inner;
+        this.userInteraction = userInteraction;
+    }
+    public void Delete(T entity) { if (userInteraction.Confirm("Delete?")) { inner.Delete(entity); } }
 }
 ```
 
@@ -124,11 +133,3 @@ public interface IPredicate         { bool Test(); }               // encapsulat
 ```
 
 They mirror `Action`, `Func` and `Predicate`, but interfaces can be decorated, adapted and composed, and an implementation can carry extra context through its constructor.
-
-## Checklist
-
-* A decorator, adapter or test double has pass-through or `throw NotImplemented` members → split.
-* Clients use disjoint subsets of the members → split by client.
-* The implementation would need two unrelated infrastructure dependencies → split by architecture and package separately.
-* Someone built an aggregate "soup" interface → remove it.
-* Segregation is far cheaper at design time than as a refactor. Think about it whenever you *create* an interface.

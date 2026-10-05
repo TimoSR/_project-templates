@@ -61,24 +61,33 @@ Book chapters 4–7. Running example: FTGO's Create Order saga and the Order His
 * **Generate in the aggregate, publish in the service.** The aggregate can't get infrastructure injected, and shouldn't.
 
 ```csharp
-// domain/aggregates/ticket.cs: the root guards the transition and returns what happened; it never publishes
-public TicketResult Accept(System.DateTimeOffset readyBy)
+// Domain/Ticket.cs: the root guards the transition and returns the event, or null when nothing happened; it never publishes
+public TicketAccepted? Accept(System.DateTimeOffset readyBy)
 {
-    if (State != TicketState.AwaitingAcceptance) return new TicketResult(Accepted: false, Events: []);
+    if (State != TicketState.AwaitingAcceptance)
+    {
+        return null;
+    }
 
     State = TicketState.Accepted;
     ReadyBy = readyBy;
-    return new TicketResult(Accepted: true, Events: [new TicketAccepted(Id, readyBy)]);
+    return new TicketAccepted(Id, readyBy);
 }
 
-// application/accept-ticket.cs: load → decide → save state and events in one transaction
+// Application/AcceptTicket.cs: load → decide → save state and event in one transaction
 var ticket = await ticketRepository.FindById(ticketId);
-if (ticket is null) return AcceptTicketOutcome.NotFound;
+if (ticket == null)
+{
+    return AcceptTicketOutcome.NotFound;
+}
 
-var result = ticket.Accept(readyBy);
-if (!result.Accepted) return AcceptTicketOutcome.WrongState;
+var accepted = ticket.Accept(readyBy);
+if (accepted == null)
+{
+    return AcceptTicketOutcome.WrongState;
+}
 
-await ticketRepository.Save(ticket, result.Events); // inserts outbox rows in the same transaction
+await ticketRepository.Save(ticket, accepted); // inserts the outbox row in the same transaction
 return AcceptTicketOutcome.Accepted;
 ```
 
@@ -141,17 +150,32 @@ stateDiagram-v2
 ```
 
 ```csharp
-// application/create-order-saga.cs: (state, reply) → (next state, command to send). Pure: unit-test it without a broker.
-public static (CreateOrderSagaState Next, ISagaCommand? Command) Handle(CreateOrderSagaState state, ISagaReply reply, long orderId) =>
-    (state, reply) switch
+// Application/CreateOrderSaga.cs: (state, reply) → (next state, command to send). Pure: unit-test it without a broker.
+public static (CreateOrderSagaState Next, ISagaCommand? Command) Handle(CreateOrderSagaState state, ISagaReply reply, long orderId)
+{
+    switch (state)
     {
-        (CreateOrderSagaState.VerifyingConsumer, ConsumerVerified)           => (CreateOrderSagaState.CreatingTicket, new CreateTicket(orderId)),
-        (CreateOrderSagaState.VerifyingConsumer, ConsumerVerificationFailed) => (CreateOrderSagaState.RejectingOrder, new RejectOrder(orderId)),
-        (CreateOrderSagaState.CreatingTicket, TicketCreated)                 => (CreateOrderSagaState.AuthorizingCard, new AuthorizeCard(orderId)),
-        (CreateOrderSagaState.AuthorizingCard, CardAuthorizationFailed)      => (CreateOrderSagaState.RejectingTicket, new RejectTicket(orderId)),
-        // ...one row per transition in the diagram
-        _ => (state, null), // unexpected reply: stay in this state and log it
-    };
+        case CreateOrderSagaState.VerifyingConsumer:
+            if (reply is ConsumerVerified)
+            {
+                return (CreateOrderSagaState.CreatingTicket, new CreateTicket(orderId));
+            }
+            if (reply is ConsumerVerificationFailed)
+            {
+                return (CreateOrderSagaState.RejectingOrder, new RejectOrder(orderId));
+            }
+            break;
+        case CreateOrderSagaState.AuthorizingCard:
+            if (reply is CardAuthorizationFailed)
+            {
+                return (CreateOrderSagaState.RejectingTicket, new RejectTicket(orderId));
+            }
+            break;
+        // ...one case per state in the diagram
+    }
+
+    return (state, null); // unexpected reply: stay in this state and log it
+}
 ```
 
 * Atomicity at each step:
@@ -194,17 +218,26 @@ load: Order.Empty → Apply(OrderCreated) → Apply(OrderApproved) → current s
 
 ```csharp
 // Process: decide, don't mutate. Apply: mutate, can't fail (the event already happened).
-public OrderRevisionResult Process(ReviseOrder command)
+public OrderRevisionProposed? Process(ReviseOrder command) // null = rejected
 {
-    if (State != OrderState.Approved) return OrderRevisionResult.Rejected;
+    if (State != OrderState.Approved)
+    {
+        return null;
+    }
 
     var newTotal = LineItems.TotalAfter(command.Revision);
-    if (newTotal < OrderMinimum) return OrderRevisionResult.Rejected;
+    if (newTotal < OrderMinimum)
+    {
+        return null;
+    }
 
-    return OrderRevisionResult.Proposed(new OrderRevisionProposed(command.Revision, Total, newTotal));
+    return new OrderRevisionProposed(command.Revision, Total, newTotal);
 }
 
-public Order Apply(OrderRevisionProposed revisionProposed) => this with { State = OrderState.RevisionPending };
+public void Apply(OrderRevisionProposed revisionProposed)
+{
+    State = OrderState.RevisionPending;
+}
 ```
 
 * **Concurrency:** optimistic locking on the aggregate version, where the version is the event count.

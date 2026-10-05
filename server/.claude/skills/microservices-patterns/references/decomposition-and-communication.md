@@ -101,7 +101,7 @@ Accounting (consumer, restaurant, courier) → Accounting Service   similar enou
 * Every proxy that calls another service gets three guards. Their values live in config:
 
 ```json
-// src/_config/features/order.json: defaults, overridden per environment
+// appsettings.json section: defaults, overridden per environment
 {
   "kitchenServiceClient": {
     "timeoutMilliseconds": 2000,                  // never wait forever
@@ -144,7 +144,7 @@ Delivery Service  unavailable → cached copy, or omit it   (the UI is still use
    * Publish-subscribe delivers to every subscriber. Events use it, on a channel named after the aggregate (`Order`).
 * Async request/response puts a `MessageId` and a `ReplyChannel` on the request. The reply carries `CorrelationId = MessageId`.
 * **Broker vs brokerless:** use a broker. It buffers messages while the consumer is down, and senders don't need to know where consumers are. Brokerless messaging needs both sides up and needs discovery, the same weaknesses as REST.
-* Choosing a broker: ordering, delivery guarantees, persistence, durability across reconnects, scalability, latency, competing consumers. Different parts of one system may need different trade-offs.
+* Choosing a broker: ordering, delivery guarantees, persistence, durability across reconnects, scalability, latency, competing consumers. Different parts of one system may need different trade-offs. The comparison table is in `system-integration` (messaging.md §4).
 
 **Ordering while scaling out:** a sharded channel. The shard key is the aggregate id, and each shard has exactly one consumer instance (a Kafka consumer group).
 
@@ -184,7 +184,7 @@ COMMIT;
 
 * Relay options:
    * Polling publisher: simple, fine at low scale, but polling costs load.
-   * Transaction log tailing: reads the Postgres WAL or MySQL binlog (Debezium). Scales, but takes more setup.
+   * Transaction log tailing: reads the database log (Postgres WAL, MySQL binlog, SQL Server CDC) with Debezium. Scales, but takes more setup.
 * 2PC/XA is not the answer. Kafka, RabbitMQ and most NoSQL stores don't support it, and it needs every participant up at once.
 
 ## 5. Availability: keep sync calls out of the request path

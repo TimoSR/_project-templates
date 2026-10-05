@@ -61,8 +61,8 @@ and is deleted on ack                                  at offset 2       at offs
 * Idempotent consumer: record the message id in the same transaction as the effect.
 
 ```sql
-INSERT INTO processed_messages (message_id) VALUES ('evt_01J9ZK3') ON CONFLICT DO NOTHING;
--- 0 rows inserted → already handled → ack and skip
+INSERT INTO processed_messages (message_id) VALUES ('evt_01J9ZK3'); -- primary key on message_id
+-- duplicate key (SQL Server error 2627; Postgres: ON CONFLICT DO NOTHING → 0 rows) → already handled → ack and skip
 ```
 
 * Saving and publishing atomically (transactional outbox): `microservices-patterns`.
@@ -138,11 +138,7 @@ A queue between "submit" and "do" gives three things:
 
 ## 7. Event-driven architecture
 
-* Terms:
-   * **Event:** a fact in the past tense (`InvoicePaid`).
-   * **Producer:** emits it, doesn't wait, doesn't know who listens.
-   * **Consumer:** reacts to it.
-   * **Broker / channel:** carries it.
+* An event is a past-tense fact (`InvoicePaid`). The producer emits it without waiting or knowing who listens; a broker or channel carries it to consumers.
 * What it solves:
    * Loose coupling: add a consumer without touching the producer.
    * Asymmetric availability: the consumer can be down; events wait.
@@ -153,6 +149,6 @@ A queue between "submit" and "do" gives three things:
    * Eventual consistency: the CRM shows "unpaid" for a few seconds.
    * Debugging: one action spans several processes → a correlation id in every envelope + distributed tracing (OpenTelemetry).
    * Duplicates and ordering (§3), schema evolution, a broker to run, harder end-to-end tests.
-* Default for one deployable: in-process domain events and handlers. A broker enters when a consumer must run in another process or survive restarts.
+* Default for one deployable: in-process domain events and handlers (this repo: MediatR, plus the `ProcessingQueueEntry` table when work must survive a restart). A broker enters when a consumer must run in another process.
 * Event sourcing (state rebuilt by replaying stored events) and CQRS views: `microservices-patterns`.
 * Good pub/sub fits: IoT telemetry (devices come and go), monitoring and centralized logging, replication, notifications, game matchmaking, lobbies and telemetry. Not media streaming, which needs smooth, ordered delivery (HLS/DASH, WebRTC).

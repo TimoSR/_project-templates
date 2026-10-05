@@ -2,9 +2,7 @@
 
 ## Definition
 
-* **Meyer:** open for extension, closed for modification.
-* **Martin:** behavior can be extended to meet new requirements without changing the module's source or binary.
-* In practice: **treat working code as append-only.** New behavior arrives as new classes plugged into extension points.
+* **Treat working code as append-only:** new behavior arrives as new classes plugged into extension points, not as edits to the module's source or binary.
 
 ## Edits that are still allowed
 

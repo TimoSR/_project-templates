@@ -106,6 +106,7 @@ More: [Extend Claude Code](https://code.claude.com/docs/en/features-overview#mat
 
 * Read at the start of every conversation. `/init` generates a starter; `/context` confirms it loaded.
 * **For each line ask: "Would removing this cause Claude to make mistakes?" If not, cut it.** A bloated file makes Claude ignore the instructions that matter.
+* How to write the lines that stay: [high-quality-tokens](../high-quality-tokens/SKILL.md).
 
 | ✓ Include | ✗ Exclude |
 |---|---|
@@ -238,14 +239,15 @@ claude -p "<your prompt>" --output-format json | your_command                   
 
 A fresh session reviews better because it isn't biased toward code it just wrote.
 
-```
-Session A (writer)    "Implement a rate limiter for our API endpoints"
-        ↓
-Session B (reviewer)  "Review the rate limiter implementation in @src/middleware/rateLimiter.ts.
-                       Look for edge cases, race conditions, and consistency with our existing
-                       middleware patterns."
-        ↓
-Session A (writer)    "Here's the review feedback: [Session B output]. Address these issues."
+```mermaid
+sequenceDiagram
+    participant writer as Session A (writer)
+    participant reviewer as Session B (reviewer)
+    Note over writer: "Implement a rate limiter for our API endpoints"
+    writer->>reviewer: implementation on disk
+    Note over reviewer: "Review the rate limiter implementation in @src/middleware/rateLimiter.ts.<br/>Look for edge cases, race conditions, and consistency with our existing<br/>middleware patterns."
+    reviewer->>writer: review output, pasted back by you
+    Note over writer: "Here's the review feedback: [Session B output]. Address these issues."
 ```
 
 The same works for tests: one Claude writes tests, another writes code to pass them.
@@ -259,10 +261,11 @@ The same works for tests: one Claude writes tests, another writes code to pass t
       ```bash
       for file in $(cat files.txt); do
         claude -p "Migrate $file from Python 2 to Python 3. Return OK or FAIL." \
-          --allowedTools "Edit,Bash(git commit *)"
+          --allowedTools "Edit,Bash(git commit *)" \
+          --permission-mode dontAsk
       done
       ```
-   3. Test on 2–3 files, refine the prompt, then run the full set. `--allowedTools` matters when unattended.
+   3. Test on 2–3 files, refine the prompt, then run the full set. Unattended, `--allowedTools` pre-approves what the task needs and `dontAsk` denies anything else that would need approval.
 
 ### Auto mode, unattended
 

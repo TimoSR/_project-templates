@@ -34,8 +34,8 @@ abstract class Logistics
     protected abstract ITransport CreateTransport();
     public void PlanDelivery() { var transport = CreateTransport(); transport.Deliver(); }
 }
-class RoadLogistics : Logistics { protected override ITransport CreateTransport() => new Truck(); }
-class SeaLogistics  : Logistics { protected override ITransport CreateTransport() => new Ship(); }
+class RoadLogistics : Logistics { protected override ITransport CreateTransport() { return new Truck(); } }
+class SeaLogistics  : Logistics { protected override ITransport CreateTransport() { return new Ship(); } }
 ```
 
 * Steps that matter
@@ -128,7 +128,7 @@ class Circle : Shape
 {
     public int Radius;
     public Circle(Circle source) : base(source) { Radius = source.Radius; }
-    public override Shape Clone() => new Circle(this);
+    public override Shape Clone() { return new Circle(this); }
 }
 ```
 
@@ -155,7 +155,11 @@ var database = Database.Instance;
 
 // ✓ one instance through the DI lifetime, injected where needed
 services.AddSingleton<IDatabase, Database>();
-class OrderService(IDatabase database) { ... }
+class OrderService
+{
+    private readonly IDatabase database;
+    public OrderService(IDatabase database) { this.database = database; }
+}
 ```
 
 * Prefer the DI form wherever a container exists: you keep "one instance" and lose the global access and the testing problems.
@@ -165,4 +169,4 @@ class OrderService(IDatabase database) { ... }
    * Masks bad design where components know too much about each other.
    * Needs care with threads.
    * Private constructor and static access defeat most mocking.
-* Relations: Facades, Abstract Factories, Builders and Prototypes often need only one instance.
+* Relations: Facades, Abstract Factories, Builders and Prototypes often need only one instance: register them as DI singletons rather than implementing Singleton.

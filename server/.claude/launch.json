@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-local",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": ["local"],
+      "cwd": "Web",
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "web-local-proxy",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "cross-env",
+        "apiHttpsBasePath=http://localhost:6011/graphql",
+        "apiWssBasePath=wss://api.test-flexfunding.com/graphql",
+        "nuxt",
+        "dev"
+      ],
+      "cwd": "Web",
+      "port": 3000
+    }
+  ]
+}

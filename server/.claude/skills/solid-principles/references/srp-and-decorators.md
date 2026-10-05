@@ -1,11 +1,11 @@
 # Single Responsibility and the patterns that enforce it
 
 ## Contents
-- Definition and finding responsibilities
+- Definition (finding responsibilities)
 - The two-stage refactor
 - Rules for extracted interfaces
-- Adapter
-- Decorator and its variants
+- Adapter: third-party → first-party
+- Decorator (variants)
 - Limits
 
 ## Definition
@@ -47,8 +47,19 @@ public void ProcessTrades(Stream stream)
 Move each responsibility behind an interface and inject it:
 
 ```csharp
-public class TradeProcessor(ITradeDataProvider provider, ITradeParser parser, ITradeStorage storage)
+public class TradeProcessor
 {
+    private readonly ITradeDataProvider provider;
+    private readonly ITradeParser parser;
+    private readonly ITradeStorage storage;
+
+    public TradeProcessor(ITradeDataProvider provider, ITradeParser parser, ITradeStorage storage)
+    {
+        this.provider = provider;
+        this.parser = parser;
+        this.storage = storage;
+    }
+
     public void ProcessTrades()
     {
         var lines  = provider.GetTradeData();
@@ -81,7 +92,7 @@ interface ITradeDataProvider { IEnumerable<string> GetTradeData(Stream stream); 
 
 // ✓ the context goes into the implementation's constructor
 interface ITradeDataProvider { IEnumerable<string> GetTradeData(); }
-class StreamTradeDataProvider(Stream stream) : ITradeDataProvider { ... }
+class StreamTradeDataProvider : ITradeDataProvider { public StreamTradeDataProvider(Stream stream) { ... } ... }
 ```
 
 * **Naming:** drop the `I` and prefix the implementation context (`StreamTradeDataProvider`, `AdoNetTradeStorage`, `DapperTradeStorage`). Use `Simple…` when there is no special dependency.
@@ -93,9 +104,11 @@ class StreamTradeDataProvider(Stream stream) : ITradeDataProvider { ... }
 The adapter implements *your* interface and delegates to the third-party type:
 
 ```csharp
-public class Log4NetLoggerAdapter(ILog log) : ILogger
+public class Log4NetLoggerAdapter : ILogger
 {
-    public void LogWarning(string message, params object[] args) => log.WarnFormat(message, args);
+    private readonly ILog log;
+    public Log4NetLoggerAdapter(ILog log) { this.log = log; }
+    public void LogWarning(string message, params object[] args) { log.WarnFormat(message, args); }
 }
 ```
 
@@ -108,8 +121,10 @@ public class Log4NetLoggerAdapter(ILog log) : ILogger
 A decorator implements an interface and wraps another instance of the same interface. It adds behavior before or after delegating, and the client can't tell. Use it when a concern is too entangled with a class's intent to move out any other way.
 
 ```csharp
-public class LoggingCalculator(ICalculator inner) : ICalculator
+public class LoggingCalculator : ICalculator
 {
+    private readonly ICalculator inner;
+    public LoggingCalculator(ICalculator inner) { this.inner = inner; }
     public int Add(int x, int y)
     {
         System.Console.WriteLine($"Add(x={x}, y={y})");
@@ -130,7 +145,7 @@ public class LoggingCalculator(ICalculator inner) : ICalculator
 
 ```csharp
 // ✗ the client owns the condition and depends on its source
-if (dateTester.TodayIsAnEvenDayOfTheMonth) component.Something();
+if (dateTester.TodayIsAnEvenDayOfTheMonth) { component.Something(); }
 
 // ✓ the condition is a decorator; the client just calls
 IComponent component = new PredicatedComponent(new RealComponent(), new TodayIsAnEvenDayOfTheMonthPredicate());

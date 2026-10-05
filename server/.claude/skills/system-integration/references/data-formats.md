@@ -5,7 +5,7 @@ What the bytes mean: formats, encodings, dates, security primitives, files and m
 ## Contents
 
 1. Formats: pick by consumer
-2. Terms: encoding, serialization, marshalling, parsing
+2. Terms: serialize, encode, parse, compress
 3. Text and charsets
 4. Base64
 5. Dates and time
@@ -50,24 +50,22 @@ Protobuf  0A 03 41 64 61 10 24                              7 bytes: field 1 = "
 
 ## 2. Terms
 
-```
-object in memory ──serialize──▶ bytes in a format ──encode──▶ transport-safe bytes ──▶ wire
-       ▲                        (JSON, Protobuf)              (UTF-8, Base64, gzip)
-       └──deserialize / parse◀──────────────decode◀──────────────────────────────────┘
+```mermaid
+flowchart LR
+    objectInMemory[object in memory] -- serialize --> formatBytes["bytes in a format (JSON, Protobuf)"]
+    formatBytes -- encode --> transportBytes["transport-safe bytes (UTF-8, Base64, gzip)"]
+    transportBytes <-->|send / receive| wire
+    transportBytes -- decode --> formatBytes
+    formatBytes -- "deserialize,<br/>parse" --> objectInMemory
 ```
 
-* **Encoding:** converting data to another representation by a public rule (UTF-8, Base64, URL percent-encoding, gzip). Anyone can decode it, so it's never security.
-* **Serialization:** an object graph → bytes in a format, so it can be stored, sent or deep-copied. Deserialization rebuilds it.
-* **Marshalling:** serialization for crossing a process boundary (RPC, interop), sometimes with type information. In HTTP APIs the two words mean the same thing.
-* **Parsing:** turning text into structured data you can query (`JsonDocument.Parse`), instead of searching a string.
-* **Compression:** lossless (gzip, brotli, zstd: data and text) vs lossy (JPEG, MP3, H.264: media, where some loss is invisible). Trade-offs: Lossless vs Lossy, Compression vs Time.
+* Encoding (UTF-8, Base64, URL percent-encoding, gzip) follows a public rule: anyone can decode it, so it's never security.
+* Parse into structured data (`JsonDocument.Parse`, a typed DTO); never search the raw string.
+* Compression: lossless (gzip, brotli, zstd) for data and text, lossy (JPEG, MP3, H.264) only for media. Trade-offs: Lossless vs Lossy, Compression vs Time.
 
 ## 3. Text and charsets
 
-* ASCII: 7 bits, 128 characters, English only.
-* Unicode: the character set, one code point per character (`æ` = U+00E6). Not an encoding.
-* UTF-8: 1–4 bytes per character, ASCII-compatible. The default for files, HTTP, JSON and databases.
-* UTF-16: 2 or 4 bytes per character. The in-memory string format of .NET and JavaScript.
+* UTF-8 on the wire and on disk (files, HTTP, JSON, databases); .NET and JavaScript strings are UTF-16 in memory.
 * Mojibake: `æ` is `C3 A6` in UTF-8; decoded as Latin-1 those bytes read `Ã¦`. Fix it by declaring the charset (`Content-Type: application/json; charset=utf-8`), not by replacing characters.
 * .NET: `StreamWriter` with `Encoding.UTF8` writes a BOM (`EF BB BF`), which breaks some parsers. Pass `new System.Text.UTF8Encoding(false)` unless the consumer is Excel.
 * URL encoding: `æ` → `%C3%A6`, space → `%20` (`+` in form bodies). Use `System.Uri.EscapeDataString`, never string concatenation.
@@ -75,12 +73,10 @@ object in memory ──serialize──▶ bytes in a format ──encode──�
 
 ## 4. Base64
 
-* 64 characters (`A–Z a–z 0–9 + /`), `=` padding. Every 3 bytes become 4 characters: +33% size.
-* base64url swaps `+ /` for `- _` and drops the padding: used in URLs and JWTs.
+* Every 3 bytes become 4 characters: +33% size. base64url (`- _`, no padding) in URLs and JWTs.
 * Needed when binary must travel through a text-only channel: email attachments (SMTP was 7-bit ASCII), binary inside JSON or XML, data URIs (`<img src="data:image/png;base64,iVBOR...">`).
 * Don't store images as Base64 in a database (+33% size, no streaming), and don't inline images except tiny icons: inlined images can't be cached by the browser and aren't indexed by search engines.
 * A vendor sends Base64? Decode once in the adapter, store the bytes in blob storage, and pass a URL on.
-* Try it in a browser console: `btoa('hi')` → `aGk=`, `atob('aGk=')` → `hi`.
 
 ## 5. Dates and time
 
@@ -139,7 +135,7 @@ Content-Type: application/pdf
 * The client's `filename` and `Content-Type` are attacker-controlled:
    * `Path.Combine(uploadsFolder, file.FileName)` with `..\..\appsettings.json` is path traversal.
    * A `.exe` renamed to `.png` still claims `image/png`.
-* Rules, applied in `_dto` before the domain:
+* Rules, applied in `_DTO` before the domain:
    * Size limit, enforced by the server too (`FormOptions.MultipartBodyLengthLimit`, Kestrel `MaxRequestBodySize`).
    * Allowed types checked against magic bytes: `%PDF` = `25 50 44 46`, PNG = `89 50 4E 47`, JPEG = `FF D8 FF`.
    * Stored name = generated id. Keep the original name only as metadata.
@@ -176,7 +172,6 @@ var storedName = System.Guid.NewGuid().ToString("N"); // never file.FileName
 
 ## 8. Media
 
-* Things to plan for: format support, size and bandwidth, encoding cost, accessibility (alt text, captions, transcripts), metadata, security, licensing, CDN delivery, analytics.
 * Images: serve by URL from blob storage or a CDN; resize on upload or on demand. Strip EXIF metadata from user uploads: it can hold the GPS position where the photo was taken. JPEG for photos (lossy), PNG for transparency and sharp edges (lossless), WebP/AVIF for smaller files.
 * Audio and video: a codec (H.264/AAC, VP9/Opus) inside a container (MP4, WebM). Transcode with `ffmpeg`. Voice calls: VoIP or WebRTC.
 
@@ -191,4 +186,3 @@ var storedName = System.Guid.NewGuid().ToString("N"); // never file.FileName
 * Adaptive bitrate (HLS, DASH): the video is cut into segments of a few seconds, each encoded at several bitrates. The player switches bitrate per segment as bandwidth changes.
    * Gains: smooth playback, scales through CDNs, cheaper per viewer at volume.
    * Costs: encoding time and storage for every bitrate, more moving parts. Trade-off: Speed vs Memory, paid back at scale.
-* P2P file distribution (BitTorrent): files split into pieces fetched from many peers. Scales with the number of downloaders and removes the central server, but you lose control and visibility.

@@ -1,6 +1,6 @@
 ---
 name: claude-best-practices
-description: Claude Code working practices - verification, planning, context management, review, and configuring CLAUDE.md and .claude/. Use when starting a multi-file or non-trivial change, when setting up or auditing CLAUDE.md or .claude/ (skills, agents, hooks, settings), when planning headless, parallel or unattended Claude Code runs, or when the user asks how to use Claude Code effectively.
+description: Applies Claude Code working practices - verification, planning, context management, review, and configuring CLAUDE.md and .claude/. Use when starting a multi-file or non-trivial change, when setting up or auditing CLAUDE.md or .claude/ (skills, agents, hooks, settings), when planning headless, parallel or unattended Claude Code runs, or when the user asks how to use Claude Code effectively. Not for writing or fixing one skill (building-skills).
 ---
 
 # Claude Code Best Practices
@@ -49,4 +49,4 @@ uncertain approach, multi-file change, or unfamiliar code?
 
 * Choose the mechanism first ([reference §4](reference.md#4-configuring-the-environment)): `CLAUDE.md` for every-session rules, skills for on-demand knowledge, hooks for must-happen actions, subagents for isolated tasks.
 * For every `CLAUDE.md` line: *would removing this cause Claude to make mistakes?* If not, cut it.
-* Write all of it per the `high-quality-tokens` skill. Every line is reloaded in every session.
+* Write all of it per [high-quality-tokens](../high-quality-tokens/SKILL.md) (bullets, a concrete example per concept, no filler). Every line is reloaded in every session.
