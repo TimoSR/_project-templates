@@ -1,8 +1,3 @@
----
-paths:
-  - "**/*.{cs,ts,js,vue,rs}"
----
-
 # House code style
 
 Apply this style to new code. Preserve existing conventions in narrowly edited legacy code and follow formatter configuration for whitespace. Do not restyle unrelated lines.
@@ -39,3 +34,9 @@ Apply this style to new code. Preserve existing conventions in narrowly edited l
 - Before writing Rust, read `.claude/skills/c-like-coding-style/rust.md` for signatures, error handling, crate layout, and lint setup.
 
 Examples: `for` + `if` + `push` instead of `.filter().map()` for local logic; `.Where(...).Select(...)` remains appropriate when EF must translate the query into SQL.
+
+## Full standard: `c-like-coding-style` skill
+
+Imported so the whole skill applies whenever this rule loads. The lines above narrow it for this repo and win where they differ. Links inside it resolve under `.claude/skills/c-like-coding-style/`.
+
+@../skills/c-like-coding-style/SKILL.md

@@ -1,10 +1,3 @@
----
-paths:
-  - "src/features/**/api/REST/**"
-  - "src/features/**/_dto/**"
-  - "**/*openapi*.{json,yaml,yml}"
----
-
 # REST contracts
 
 Applies to REST endpoints in a module's `api/REST/` and their request/response types in `_dto/`, not GraphQL operations or event handlers. New contracts follow the standard; published routes retain compatibility. Detailed choices/examples: `.claude/skills/api-design/SKILL.md` and `reference.md`.
@@ -21,3 +14,9 @@ Applies to REST endpoints in a module's `api/REST/` and their request/response t
 - Default REST level 2, no HAL. Add hypermedia only for a demonstrated client requirement.
 
 Example: new `POST /invoices` → 201 + Location; an existing published `/invoices/new` is flagged, not silently renamed.
+
+## Full standard: `api-design` skill
+
+Imported so the whole skill applies whenever this rule loads. The lines above narrow it for this repo and win where they differ. Links inside it resolve under `.claude/skills/api-design/`.
+
+@../skills/api-design/SKILL.md

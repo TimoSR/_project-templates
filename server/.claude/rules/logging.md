@@ -1,8 +1,3 @@
----
-paths:
-  - "src/**/*.cs"
----
-
 # Logging
 
 - Match the class's existing Serilog or `ILogger<T>` logger. Use constant message templates with named PascalCase placeholders, never interpolation/concatenation.
@@ -14,4 +9,9 @@ paths:
 - Guard expensive arguments and hot-path/below-Information allocation costs with `IsEnabled` or MEL source-generated logging. Serilog's generic overloads cover 1–3 arguments; MEL `params` calls and Serilog 4+ arguments may allocate even when disabled.
 
 Example: `_logger.Error(exception, "Payout failed for {InvoiceId}", invoiceId)`.
-Implementation and level examples: `.claude/skills/logging/SKILL.md`.
+
+## Full standard: `logging` skill
+
+Imported so the whole skill applies whenever this rule loads. The lines above narrow it for this repo and win where they differ. Links inside it resolve under `.claude/skills/logging/`.
+
+@../skills/logging/SKILL.md

@@ -35,7 +35,7 @@ Judge context by the **value each token carries**, never by the token count. Eve
 | Content | Value | Decision |
 |---|---|---|
 | Approach / Data / Building Blocks sections that shape every design | high | keep |
-| Valuable content needed only for some tasks (code style, `.claude/` know-how like this file) | high | keep, in a skill or `paths:` rule, not CLAUDE.md or an `@` import: it loads when relevant, and every always-loaded line dilutes adherence to the rest |
+| Valuable content needed only for some tasks (code style, `.claude/` know-how like this file) | high | keep, in a skill or `paths:` rule (which may `@`-import the skill), not CLAUDE.md or an `@` import from CLAUDE.md: it loads when relevant, and every always-loaded line dilutes adherence to the rest |
 | A concrete example that makes a rule unambiguous | high | keep, even if long |
 | Preamble, filler, a sentence that repeats the one above | none | cut |
 | A rule whose `paths:` match no file here (`API/Backend/**` vs `src/features/**`) | none: it never loads | fix the paths |
