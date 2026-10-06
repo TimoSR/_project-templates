@@ -19,9 +19,11 @@ Two classes belong in the same module only when they share:
 * **a bounded context:** the same rule.
 
 ```
-✓ cohesive:      UserReader + UserCache          both deal with user data, same layer
-✗ not cohesive:  one module holding UserController + UserRepository + InvoiceMapper
-                 several layers and contexts together; it gets harder to extend over time
+✓ cohesive      UserReader + UserCache
+               → both deal with user data, same layer
+
+✗ not cohesive  UserController + UserRepository + InvoiceMapper in one module
+               → several layers and contexts together; harder to extend over time
 ```
 
 ## Connascence: grading a dependency

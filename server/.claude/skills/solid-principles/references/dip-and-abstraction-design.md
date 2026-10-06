@@ -57,12 +57,19 @@ if (clock.Now.Hour >= 17) { CloseTrading(); }
 ## Package structure: Entourage vs Stairway
 
 ```
-✗ Entourage: the interface ships with its implementation
-Controllers ──► Services { ISecurityService, SecurityService } ──► Domain ──► NHibernate
-                (build Controllers alone and NHibernate still lands in bin/)
+✗ Entourage — the interface ships with its implementation
 
-✓ Stairway: interfaces and implementations in separate packages
-Controllers ──► Services.Interfaces ◄── Services.Impl ──► Domain.Interfaces ◄── Domain.Impl ──► Data.Interfaces ◄── Data.NHibernate
+  Controllers ──► Services { ISecurityService, SecurityService } ──► Domain ──► NHibernate
+
+  → build Controllers alone and NHibernate still lands in bin/
+
+✓ Stairway — interfaces and implementations in separate packages
+
+  Controllers    ──►  Services.Interfaces  ◄──  Services.Impl
+  Services.Impl  ──►  Domain.Interfaces    ◄──  Domain.Impl
+  Domain.Impl    ──►  Data.Interfaces      ◄──  Data.NHibernate
+
+  → every arrow points at an interface package; no implementation is ever referenced
 ```
 
 What Entourage costs:
