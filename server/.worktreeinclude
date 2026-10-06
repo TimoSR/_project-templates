@@ -1,0 +1,7 @@
+# Gitignored files copied into each new worktree (.gitignore syntax).
+# Only files that match here AND are gitignored get copied.
+CLAUDE.local.md
+**/.claude/settings.local.json
+**/appsettings.LocalDev.json
+.env
+.env.*

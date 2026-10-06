@@ -1,8 +1,8 @@
 ---
 paths:
-  - "src/features/**/test/**"
-  - "**/*Tests.cs"
-  - "**/*.{test,spec}.{js,ts}"
+  - "**/*{Test,Tests,_test,-test}.*"
+  - "**/*.{test,spec}.*"
+  - "**/test_*.*"
 ---
 
 # Tests as documentation
@@ -22,4 +22,9 @@ Each module's tests live in its own `test/` folder, so the module stays extracta
 - Focused runs verify selected tests only. Before finishing a behavior change, run the full test project; repeat runs when investigating flakes/shared state.
 
 Example: `Issues_the_invoice_when_the_subscription_renews` with the renewal date visible in arrange and the expected amount literal in assert.
-Harnesses, matrices, calendar edges, and API/E2E setup: `.claude/skills/tests-as-documentation/SKILL.md`.
+
+## Full standard: `tests-as-documentation` skill
+
+Imported so the whole skill applies whenever this rule loads. The lines above narrow it for this repo and win where they differ. Links inside it resolve under `.claude/skills/tests-as-documentation/`.
+
+@../skills/tests-as-documentation/SKILL.md

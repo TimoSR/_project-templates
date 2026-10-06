@@ -1,11 +1,3 @@
----
-paths:
-  - "src/features/**/infrastructure/**"
-  - "src/_config/infrastructure/databases/**"
-  - "_tools/sql/**"
-  - "**/*.sql"
----
-
 # Persistence
 
 The template's database is PostgreSQL (`infrastructure/postgress/`, `src/_config/infrastructure/databases/supabase.json`). Use the PostgreSQL column of the `database-design` provider map; its SQL Server column doesn't apply here. Tenancy/RLS and database roles are opt-in target designs, not prerequisites for ordinary work.
@@ -23,3 +15,9 @@ The template's database is PostgreSQL (`infrastructure/postgress/`, `src/_config
 
 Example: `amount numeric(19, 4)` + `HasPrecision(19, 4)`; `status text CHECK (status IN ('Draft', 'Issued', 'Paid'))`.
 Design/provider recipes: `.claude/skills/database-design/SKILL.md` and `tenancy-and-security.md`.
+
+## Full standard: `database-design` skill
+
+Imported so the whole skill applies whenever this rule loads. The lines above narrow it for this repo and win where they differ. Links inside it resolve under `.claude/skills/database-design/`.
+
+@../skills/database-design/SKILL.md

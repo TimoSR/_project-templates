@@ -1,9 +1,3 @@
----
-paths:
-  - "src/**/*.cs"
-  - "src/_config/**"
----
-
 # Backend security
 
 New code meets these standards. Preserve existing protection schemes when narrowly editing code; flag gaps and do not silently migrate stored data. Recipes: `.claude/skills/security/SKILL.md` and `sensitive-data-protector.md`.
@@ -22,3 +16,9 @@ New code meets these standards. Preserve existing protection schemes when narrow
 - Isolation is application-level by default. Tenant columns, RLS, and database roles are target architecture; introducing them requires explicit task scope.
 
 Example: caller A requests B's invoice → no row returned, no sensitive fields, no state change.
+
+## Full standard: `security` skill
+
+Imported so the whole skill applies whenever this rule loads. The lines above narrow it for this repo and win where they differ. Links inside it resolve under `.claude/skills/security/`.
+
+@../skills/security/SKILL.md

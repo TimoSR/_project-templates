@@ -1,9 +1,3 @@
----
-paths:
-  - "src/features/**/domain/**/*.cs"
-  - "src/features/**/application/**/*.cs"
----
-
 # Financial formulas
 
 Applies when implementing money, rates, quantities, or eligibility formulas in a module's `domain/` or `application/`.
@@ -15,3 +9,9 @@ Applies when implementing money, rates, quantities, or eligibility formulas in a
 
 Example: convert an annual rate to a monthly rate explicitly before combining it with a monthly payment count.
 Use `codemath` for translating, typing, and verifying the formula.
+
+## Full standard: `codemath` skill
+
+Imported so the whole skill applies whenever this rule loads. The lines above narrow it for this repo and win where they differ. Links inside it resolve under `.claude/skills/codemath/`.
+
+@../skills/codemath/SKILL.md
